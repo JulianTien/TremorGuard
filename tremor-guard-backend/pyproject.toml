@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tremor-guard-backend"
+version = "0.1.0"
+description = "FastAPI backend for TremorGuard stage-one data platform"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.16.0,<2.0.0",
+  "email-validator>=2.2.0,<3.0.0",
+  "fastapi>=0.116.0,<1.0.0",
+  "httpx>=0.28.1,<1.0.0",
+  "pydantic-settings>=2.10.0,<3.0.0",
+  "pyjwt>=2.10.0,<3.0.0",
+  "python-multipart>=0.0.20,<1.0.0",
+  "sqlalchemy>=2.0.41,<3.0.0",
+  "passlib[bcrypt]>=1.7.4,<2.0.0",
+  "psycopg[binary]>=3.2.9,<4.0.0",
+  "uvicorn[standard]>=0.35.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4.0,<9.0.0",
+  "pytest-asyncio>=1.0.0,<2.0.0",
+  "pytest-cov>=6.2.0,<7.0.0",
+  "ruff>=0.12.0,<1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["app/tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008", "E501", "I001", "UP012", "UP037"]

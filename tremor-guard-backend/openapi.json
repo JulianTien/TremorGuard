@@ -1,0 +1,2245 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TremorGuard Backend",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/ai/chat": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Create Chat",
+        "operationId": "create_chat_v1_ai_chat_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Register",
+        "operationId": "register_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "operationId": "refresh_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/session/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get Current Session User",
+        "operationId": "get_current_session_user_v1_auth_session_me_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Me",
+        "operationId": "get_me_v1_me_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/profile": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Profile",
+        "operationId": "get_profile_v1_me_profile_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Upsert Profile",
+        "operationId": "upsert_profile_v1_me_profile_put",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatientProfileUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatientProfileUpsertResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/device-binding": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Device Binding",
+        "operationId": "get_device_binding_v1_me_device_binding_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceBindingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Bind Device",
+        "operationId": "bind_device_v1_me_device_binding_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceBindingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceBindingResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingConflictError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete Device Binding",
+        "operationId": "delete_device_binding_v1_me_device_binding_delete",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceBindingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dashboard/overview": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Overview",
+        "operationId": "get_overview_v1_dashboard_overview_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardOverviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/medications": {
+      "get": {
+        "tags": [
+          "medications"
+        ],
+        "summary": "List Medications",
+        "operationId": "list_medications_v1_medications_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "medications"
+        ],
+        "summary": "Create Medication",
+        "operationId": "create_medication_v1_medications_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMedicationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationEntryDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/medications/{medication_id}": {
+      "patch": {
+        "tags": [
+          "medications"
+        ],
+        "summary": "Update Medication",
+        "operationId": "update_medication_v1_medications__medication_id__patch",
+        "parameters": [
+          {
+            "name": "medication_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Medication Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMedicationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationEntryDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "List Reports",
+        "operationId": "list_reports_v1_reports_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Create Report",
+        "operationId": "create_report_v1_reports_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/devices/current/status": {
+      "get": {
+        "tags": [
+          "devices"
+        ],
+        "summary": "Get Current Device Status",
+        "operationId": "get_current_device_status_v1_devices_current_status_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceStatusDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ingest/tremor-events": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Tremor Events",
+        "operationId": "ingest_tremor_events_v1_ingest_tremor_events_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "X-Device-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Device-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TremorEventIngestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TremorIngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Healthcheck",
+        "operationId": "healthcheck_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthcheck Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AiChatMessageInput": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AiChatMessageInput"
+      },
+      "AiChatMessageResponse": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "const": "assistant",
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AiChatMessageResponse"
+      },
+      "AiChatRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/AiChatMessageInput"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "AiChatRequest"
+      },
+      "AiChatResponse": {
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/AiChatMessageResponse"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiChatUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "model"
+        ],
+        "title": "AiChatResponse"
+      },
+      "AiChatUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          }
+        },
+        "type": "object",
+        "title": "AiChatUsage"
+      },
+      "AiInsightDTO": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "emphasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "summary"
+        ],
+        "title": "AiInsightDTO"
+      },
+      "AuthSessionResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "access_token_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Access Token Expires At"
+          },
+          "refresh_token_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Refresh Token Expires At"
+          },
+          "current_user": {
+            "$ref": "#/components/schemas/CurrentUserDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "user_id",
+          "access_token_expires_at",
+          "refresh_token_expires_at",
+          "current_user"
+        ],
+        "title": "AuthSessionResponse"
+      },
+      "BindingConflictError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "BindingConflictError"
+      },
+      "ConsentSettingsDTO": {
+        "properties": {
+          "share_with_doctor": {
+            "type": "boolean",
+            "title": "Share With Doctor"
+          },
+          "rag_analysis_enabled": {
+            "type": "boolean",
+            "title": "Rag Analysis Enabled"
+          },
+          "cloud_sync_enabled": {
+            "type": "boolean",
+            "title": "Cloud Sync Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "share_with_doctor",
+          "rag_analysis_enabled",
+          "cloud_sync_enabled"
+        ],
+        "title": "ConsentSettingsDTO"
+      },
+      "CreateMedicationRequest": {
+        "properties": {
+          "taken_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Taken At"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dose": {
+            "type": "string",
+            "title": "Dose"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "taken_at",
+          "name",
+          "dose",
+          "status"
+        ],
+        "title": "CreateMedicationRequest"
+      },
+      "CreateReportRequest": {
+        "properties": {
+          "report_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Date"
+          },
+          "report_type": {
+            "type": "string",
+            "title": "Report Type",
+            "default": "周度病情评估摘要"
+          }
+        },
+        "type": "object",
+        "title": "CreateReportRequest"
+      },
+      "CreateReportResponse": {
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/ReportSummaryDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report"
+        ],
+        "title": "CreateReportResponse"
+      },
+      "CurrentUserDTO": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "onboarding_state": {
+            "type": "string",
+            "title": "Onboarding State"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "has_profile": {
+            "type": "boolean",
+            "title": "Has Profile"
+          },
+          "has_bound_device": {
+            "type": "boolean",
+            "title": "Has Bound Device"
+          },
+          "bound_device_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bound Device Serial"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "status",
+          "onboarding_state",
+          "has_profile",
+          "has_bound_device"
+        ],
+        "title": "CurrentUserDTO"
+      },
+      "CurrentUserResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/CurrentUserDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "CurrentUserResponse"
+      },
+      "DashboardOverviewResponse": {
+        "properties": {
+          "metric_summaries": {
+            "items": {
+              "$ref": "#/components/schemas/TremorMetricSummaryDTO"
+            },
+            "type": "array",
+            "title": "Metric Summaries"
+          },
+          "device_status": {
+            "$ref": "#/components/schemas/DeviceStatusDTO"
+          },
+          "trend_points": {
+            "items": {
+              "$ref": "#/components/schemas/TremorTrendPointDTO"
+            },
+            "type": "array",
+            "title": "Trend Points"
+          },
+          "overview_insight": {
+            "$ref": "#/components/schemas/AiInsightDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric_summaries",
+          "device_status",
+          "trend_points",
+          "overview_insight"
+        ],
+        "title": "DashboardOverviewResponse"
+      },
+      "DeviceBindingDTO": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "device_serial": {
+            "type": "string",
+            "title": "Device Serial"
+          },
+          "device_name": {
+            "type": "string",
+            "title": "Device Name"
+          },
+          "firmware_version": {
+            "type": "string",
+            "title": "Firmware Version"
+          },
+          "binding_status": {
+            "type": "string",
+            "title": "Binding Status"
+          },
+          "bound_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bound At"
+          },
+          "unbound_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unbound At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "device_serial",
+          "device_name",
+          "firmware_version",
+          "binding_status"
+        ],
+        "title": "DeviceBindingDTO"
+      },
+      "DeviceBindingRequest": {
+        "properties": {
+          "device_serial": {
+            "type": "string",
+            "title": "Device Serial"
+          },
+          "activation_code": {
+            "type": "string",
+            "title": "Activation Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_serial",
+          "activation_code"
+        ],
+        "title": "DeviceBindingRequest"
+      },
+      "DeviceBindingResponse": {
+        "properties": {
+          "device_binding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceBindingDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completion": {
+            "$ref": "#/components/schemas/ProfileCompletionStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_binding",
+          "completion"
+        ],
+        "title": "DeviceBindingResponse"
+      },
+      "DeviceStatusDTO": {
+        "properties": {
+          "battery": {
+            "type": "integer",
+            "title": "Battery"
+          },
+          "connection": {
+            "type": "string",
+            "title": "Connection"
+          },
+          "connection_label": {
+            "type": "string",
+            "title": "Connection Label"
+          },
+          "last_sync": {
+            "type": "string",
+            "title": "Last Sync"
+          },
+          "available_days": {
+            "type": "string",
+            "title": "Available Days"
+          },
+          "firmware": {
+            "type": "string",
+            "title": "Firmware"
+          }
+        },
+        "type": "object",
+        "required": [
+          "battery",
+          "connection",
+          "connection_label",
+          "last_sync",
+          "available_days",
+          "firmware"
+        ],
+        "title": "DeviceStatusDTO"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LogoutRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "LogoutRequest"
+      },
+      "LogoutResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "LogoutResponse"
+      },
+      "MeProfileResponse": {
+        "properties": {
+          "patient_profile": {
+            "$ref": "#/components/schemas/PatientProfileDTO"
+          },
+          "device_status": {
+            "$ref": "#/components/schemas/DeviceStatusDTO"
+          },
+          "consent_settings": {
+            "$ref": "#/components/schemas/ConsentSettingsDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "patient_profile",
+          "device_status",
+          "consent_settings"
+        ],
+        "title": "MeProfileResponse"
+      },
+      "MedicationEntryDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "time": {
+            "type": "string",
+            "title": "Time"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dose": {
+            "type": "string",
+            "title": "Dose"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "time",
+          "name",
+          "dose",
+          "status"
+        ],
+        "title": "MedicationEntryDTO"
+      },
+      "MedicationListResponse": {
+        "properties": {
+          "medication_entries": {
+            "items": {
+              "$ref": "#/components/schemas/MedicationEntryDTO"
+            },
+            "type": "array",
+            "title": "Medication Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "medication_entries"
+        ],
+        "title": "MedicationListResponse"
+      },
+      "PatientProfileDTO": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "age": {
+            "type": "integer",
+            "title": "Age"
+          },
+          "gender": {
+            "type": "string",
+            "title": "Gender"
+          },
+          "diagnosis": {
+            "type": "string",
+            "title": "Diagnosis"
+          },
+          "duration": {
+            "type": "string",
+            "title": "Duration"
+          },
+          "hospital": {
+            "type": "string",
+            "title": "Hospital"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "age",
+          "gender",
+          "diagnosis",
+          "duration",
+          "hospital",
+          "device_id"
+        ],
+        "title": "PatientProfileDTO"
+      },
+      "PatientProfileUpsertRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "age": {
+            "type": "integer",
+            "title": "Age"
+          },
+          "gender": {
+            "type": "string",
+            "title": "Gender"
+          },
+          "diagnosis": {
+            "type": "string",
+            "title": "Diagnosis"
+          },
+          "duration": {
+            "type": "string",
+            "title": "Duration"
+          },
+          "hospital": {
+            "type": "string",
+            "title": "Hospital"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "age",
+          "gender",
+          "diagnosis",
+          "duration",
+          "hospital"
+        ],
+        "title": "PatientProfileUpsertRequest"
+      },
+      "PatientProfileUpsertResponse": {
+        "properties": {
+          "patient_profile": {
+            "$ref": "#/components/schemas/PatientProfileDTO"
+          },
+          "completion": {
+            "$ref": "#/components/schemas/ProfileCompletionStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "patient_profile",
+          "completion"
+        ],
+        "title": "PatientProfileUpsertResponse"
+      },
+      "ProfileCompletionStatus": {
+        "properties": {
+          "onboarding_state": {
+            "type": "string",
+            "title": "Onboarding State"
+          },
+          "has_profile": {
+            "type": "boolean",
+            "title": "Has Profile"
+          },
+          "has_bound_device": {
+            "type": "boolean",
+            "title": "Has Bound Device"
+          }
+        },
+        "type": "object",
+        "required": [
+          "onboarding_state",
+          "has_profile",
+          "has_bound_device"
+        ],
+        "title": "ProfileCompletionStatus"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "display_name"
+        ],
+        "title": "RegisterRequest"
+      },
+      "ReportListResponse": {
+        "properties": {
+          "report_summaries": {
+            "items": {
+              "$ref": "#/components/schemas/ReportSummaryDTO"
+            },
+            "type": "array",
+            "title": "Report Summaries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_summaries"
+        ],
+        "title": "ReportListResponse"
+      },
+      "ReportSummaryDTO": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "size": {
+            "type": "string",
+            "title": "Size"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "type",
+          "size",
+          "status"
+        ],
+        "title": "ReportSummaryDTO"
+      },
+      "TremorEventIngestItem": {
+        "properties": {
+          "start_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start At"
+          },
+          "duration_sec": {
+            "type": "integer",
+            "title": "Duration Sec"
+          },
+          "dominant_hz": {
+            "type": "number",
+            "title": "Dominant Hz"
+          },
+          "rms_amplitude": {
+            "type": "number",
+            "title": "Rms Amplitude"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_at",
+          "duration_sec",
+          "dominant_hz",
+          "rms_amplitude",
+          "confidence",
+          "source"
+        ],
+        "title": "TremorEventIngestItem"
+      },
+      "TremorEventIngestRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TremorEventIngestItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "TremorEventIngestRequest"
+      },
+      "TremorIngestResponse": {
+        "properties": {
+          "accepted_count": {
+            "type": "integer",
+            "title": "Accepted Count"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate"
+          },
+          "batch_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted_count",
+          "duplicate",
+          "batch_key"
+        ],
+        "title": "TremorIngestResponse"
+      },
+      "TremorMetricSummaryDTO": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "subtitle": {
+            "type": "string",
+            "title": "Subtitle"
+          },
+          "tone": {
+            "type": "string",
+            "title": "Tone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value",
+          "unit",
+          "subtitle",
+          "tone"
+        ],
+        "title": "TremorMetricSummaryDTO"
+      },
+      "TremorTrendPointDTO": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "title": "Time"
+          },
+          "amplitude": {
+            "type": "number",
+            "title": "Amplitude"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "medication_taken": {
+            "type": "boolean",
+            "title": "Medication Taken",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "amplitude"
+        ],
+        "title": "TremorTrendPointDTO"
+      },
+      "UpdateMedicationRequest": {
+        "properties": {
+          "taken_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "dose": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dose"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "UpdateMedicationRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

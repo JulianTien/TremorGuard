@@ -1,0 +1,44 @@
+services:
+  api:
+    build:
+      context: ./tremor-guard-backend
+    env_file:
+      - ./tremor-guard-backend/.env.example
+    environment:
+      CLINICAL_DATABASE_URL: postgresql+psycopg://tg:tg@db:5432/clinical
+      IDENTITY_DATABASE_URL: postgresql+psycopg://tg:tg@identity-db:5432/identity
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      identity-db:
+        condition: service_healthy
+
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: clinical
+      POSTGRES_USER: tg
+      POSTGRES_PASSWORD: tg
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tg -d clinical"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  identity-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: identity
+      POSTGRES_USER: tg
+      POSTGRES_PASSWORD: tg
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tg -d identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
