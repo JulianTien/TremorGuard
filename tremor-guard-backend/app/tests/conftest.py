@@ -9,7 +9,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_clinical_session, get_identity_session
+from app.db import session as db_session_module
 from app.main import app
+from app.services import medical_records as medical_records_service
 from app.services.seeds import seed_clinical, seed_identity
 
 
@@ -33,6 +35,10 @@ def client(tmp_path: Path) -> Generator[TestClient, None, None]:
     identity_session_factory = sessionmaker(bind=identity_engine, expire_on_commit=False, future=True)
     clinical_session_factory = sessionmaker(bind=clinical_engine, expire_on_commit=False, future=True)
 
+    original_clinical_session_local = db_session_module.ClinicalSessionLocal
+    db_session_module.ClinicalSessionLocal = clinical_session_factory
+    medical_records_service.ClinicalSessionLocal = clinical_session_factory
+
     with identity_session_factory() as identity_session:
         user_id = seed_identity(identity_session)
 
@@ -49,8 +55,17 @@ def client(tmp_path: Path) -> Generator[TestClient, None, None]:
 
     app.dependency_overrides[get_identity_session] = override_identity_session
     app.dependency_overrides[get_clinical_session] = override_clinical_session
+    app.state.test_identity_session_factory = identity_session_factory
+    app.state.test_clinical_session_factory = clinical_session_factory
 
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
+    db_session_module.ClinicalSessionLocal = original_clinical_session_local
+    medical_records_service.ClinicalSessionLocal = original_clinical_session_local
+
+
+@pytest.fixture()
+def clinical_session_factory(client):
+    return app.state.test_clinical_session_factory

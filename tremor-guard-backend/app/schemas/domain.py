@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -200,3 +200,194 @@ class TremorIngestResponse(BaseModel):
     accepted_count: int
     duplicate: bool
     batch_key: str | None
+
+
+AsyncJobStatus = Literal["queued", "processing", "succeeded", "failed"]
+RehabPlanStatus = Literal[
+    "active_only",
+    "candidate_pending_confirmation",
+    "candidate_confirmed",
+    "candidate_superseded",
+]
+RehabConflictStatus = Literal["consistent", "conflicting", "insufficient_data"]
+RehabGenerationEligibility = Literal["eligible", "insufficient_data"]
+
+
+class MedicalRecordExtractionDTO(BaseModel):
+    id: str
+    version: int
+    status: AsyncJobStatus
+    error_summary: str | None = None
+    document_type: str | None = None
+    summary_text: str | None = None
+    raw_text: str | None = None
+    structured_payload: dict[str, Any] | None = None
+    source_model: str | None = None
+    prompt_version: str | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime
+
+
+class MedicalRecordFileDTO(BaseModel):
+    id: str
+    archive_id: str
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    processing_status: AsyncJobStatus
+    processing_error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    processed_at: datetime | None = None
+    latest_extraction: MedicalRecordExtractionDTO | None = None
+
+
+class MedicalRecordArchiveSummaryDTO(BaseModel):
+    id: str
+    title: str
+    description: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    file_count: int
+    report_count: int
+    latest_activity_at: datetime | None = None
+    latest_report: "MedicalRecordReportSummaryDTO | None" = None
+
+
+class MedicalRecordArchiveDetailDTO(MedicalRecordArchiveSummaryDTO):
+    disclaimer: str
+    consent_policy: str
+    retention_policy: str
+    delete_policy: str
+    export_policy: str
+    files: list[MedicalRecordFileDTO] = Field(default_factory=list)
+    reports: list["MedicalRecordReportSummaryDTO"] = Field(default_factory=list)
+
+
+class MedicalRecordArchiveListResponse(BaseModel):
+    archives: list[MedicalRecordArchiveSummaryDTO]
+
+
+class CreateMedicalRecordArchiveRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class CreateMedicalRecordArchiveResponse(BaseModel):
+    archive: MedicalRecordArchiveDetailDTO
+
+
+class UploadMedicalRecordFileResponse(BaseModel):
+    file: MedicalRecordFileDTO
+
+
+class MedicalRecordFileListResponse(BaseModel):
+    files: list[MedicalRecordFileDTO]
+
+
+class CreateMedicalRecordReportRequest(BaseModel):
+    report_window_days: int = Field(default=30, ge=7, le=365)
+    monitoring_window_days: int = Field(default=30, ge=7, le=365)
+    medication_window_days: int = Field(default=30, ge=7, le=365)
+
+
+class MedicalRecordReportSummaryDTO(BaseModel):
+    id: str
+    archive_id: str
+    archive_title: str | None = None
+    version: int
+    title: str
+    status: AsyncJobStatus
+    pdf_status: AsyncJobStatus
+    error_summary: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    generated_at: datetime | None = None
+    summary: str | None = None
+    pdf_ready: bool
+    pdf_file_name: str | None = None
+    report_window_label: str | None = None
+
+
+class MedicalRecordReportDetailDTO(MedicalRecordReportSummaryDTO):
+    archive_description: str | None = None
+    disclaimer: str
+    disclaimer_version: str
+    model_name: str | None = None
+    prompt_version: str | None = None
+    report_window_start: date
+    report_window_end: date
+    monitoring_window_start: date
+    monitoring_window_end: date
+    medication_window_start: date
+    medication_window_end: date
+    input_snapshot: dict[str, Any] | None = None
+    report_payload: dict[str, Any] | None = None
+    narrative_text: str | None = None
+    has_pdf: bool
+    sections: list[dict[str, str]] = Field(default_factory=list)
+    source_files: list[MedicalRecordFileDTO] = Field(default_factory=list)
+    history: list[MedicalRecordReportSummaryDTO] = Field(default_factory=list)
+
+
+class MedicalRecordReportListResponse(BaseModel):
+    reports: list[MedicalRecordReportSummaryDTO]
+
+
+class CreateMedicalRecordReportResponse(BaseModel):
+    report: MedicalRecordReportSummaryDTO
+
+
+class RehabPlanItemDTO(BaseModel):
+    template_id: str
+    name: str
+    category: str
+    duration_minutes: int
+    frequency_label: str
+    cautions: list[str] = Field(default_factory=list)
+
+
+class RehabPlanDTO(BaseModel):
+    id: str
+    title: str
+    status: RehabPlanStatus
+    scenario: str
+    version: int
+    rationale: str
+    items: list[RehabPlanItemDTO]
+    risk_flags: list[str] = Field(default_factory=list)
+    requires_confirmation: bool
+    difference_summary: str | None = None
+    generated_at: datetime
+    confirmed_at: datetime | None = None
+    activated_at: datetime | None = None
+
+
+class RehabEvidenceSummaryDTO(BaseModel):
+    as_of_date: date
+    evaluation_window: Literal["calendar_day"]
+    medication_window_summary: str
+    tremor_trend_summary: str
+    signal_consistency: RehabConflictStatus
+    explanation: str
+    generation_eligibility: RehabGenerationEligibility
+    missing_inputs: list[str] = Field(default_factory=list)
+
+
+class RehabGuidanceResponse(BaseModel):
+    active_plan: RehabPlanDTO | None = None
+    candidate_plan: RehabPlanDTO | None = None
+    evidence_summary: RehabEvidenceSummaryDTO
+    conflict_status: RehabConflictStatus
+    disclaimer: str
+    generated_at: datetime | None = None
+
+
+class GenerateRehabGuidanceRequest(BaseModel):
+    as_of_date: date
+
+
+MedicalRecordArchiveSummaryDTO.model_rebuild()
+MedicalRecordArchiveDetailDTO.model_rebuild()
+MedicalRecordReportDetailDTO.model_rebuild()

@@ -14,6 +14,7 @@ export function OnboardingDeviceBindingPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingCurrent, setIsLoadingCurrent] = useState(false)
+  const [isContinuing, setIsContinuing] = useState(false)
   const [currentBindingLabel, setCurrentBindingLabel] = useState<string | null>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -38,6 +39,12 @@ export function OnboardingDeviceBindingPage() {
 
     try {
       const result = await getDeviceBinding()
+      if (result.completion.onboardingState === 'active') {
+        const user = await refreshCurrentUser()
+        navigate(user ? resolveAuthenticatedPath(user) : '/overview', { replace: true })
+        return
+      }
+
       setCurrentBindingLabel(
         result.deviceBinding
           ? `${result.deviceBinding.deviceName} · ${result.deviceBinding.deviceSerial}`
@@ -47,6 +54,20 @@ export function OnboardingDeviceBindingPage() {
       setError(requestError instanceof Error ? requestError.message : '无法读取设备状态。')
     } finally {
       setIsLoadingCurrent(false)
+    }
+  }
+
+  async function handleContinueToWorkspace() {
+    setIsContinuing(true)
+    setError(null)
+
+    try {
+      const user = await refreshCurrentUser()
+      navigate(user ? resolveAuthenticatedPath(user) : '/overview', { replace: true })
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '无法刷新当前账号状态。')
+    } finally {
+      setIsContinuing(false)
     }
   }
 
@@ -72,6 +93,15 @@ export function OnboardingDeviceBindingPage() {
             className="mt-5 rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5"
           >
             {isLoadingCurrent ? '读取中...' : '查看当前绑定状态'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleContinueToWorkspace}
+            disabled={isContinuing}
+            className="mt-3 rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isContinuing ? '跳转中...' : '继续进入工作台'}
           </button>
 
           {currentBindingLabel ? <p className="mt-4 text-sm text-slate-300">{currentBindingLabel}</p> : null}

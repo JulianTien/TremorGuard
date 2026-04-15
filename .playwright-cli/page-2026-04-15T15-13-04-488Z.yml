@@ -1,0 +1,23 @@
+- generic [ref=e33]:
+  - generic [ref=e34]:
+    - paragraph [ref=e35]: Step 2 of 2
+    - heading "绑定手环后即可进入患者工作台。" [level=1] [ref=e36]
+    - paragraph [ref=e37]: 一期采用“一人一台有效设备”规则。若当前账号已有绑定设备，绑定新设备后旧设备会自动失效。
+    - generic [ref=e38]:
+      - paragraph [ref=e39]: 本地演示可用设备
+      - paragraph [ref=e40]: "S/N: TG-V1.0-ESP-7B31"
+      - paragraph [ref=e41]: "Activation: TG-ACT-7B31"
+    - button "查看当前绑定状态" [ref=e42]
+  - generic [ref=e43]:
+    - generic [ref=e44]:
+      - heading "录入设备信息" [level=2] [ref=e45]
+      - paragraph [ref=e46]: 请输入手环包装或设备卡片上的序列号与激活码。
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]: 设备序列号
+        - textbox "设备序列号" [ref=e50]: TG-V1.0-ESP-7B31
+      - generic [ref=e51]:
+        - generic [ref=e52]: 激活码
+        - textbox "激活码" [ref=e53]: TG-ACT-7B31
+      - generic [ref=e55]: Device already bound
+      - button "绑定设备并进入工作台" [ref=e54]

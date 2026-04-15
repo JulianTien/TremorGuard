@@ -7,9 +7,23 @@ import type {
   CurrentUser,
   DeviceBinding,
   DeviceStatus,
+  MedicalRecordArchiveDetail,
+  MedicalRecordArchiveSummary,
+  MedicalRecordFile,
+  MedicalRecordInputSnapshot,
+  MedicalRecordProcessingStatus,
+  MedicalRecordReportDetail,
+  MedicalRecordReportSection,
+  MedicalRecordReportSummary,
   MedicationEntry,
   PatientProfile,
   ProfileCompletionStatus,
+  RehabConflictStatus,
+  RehabGenerationEligibility,
+  RehabGuidanceViewData,
+  RehabPlan,
+  RehabPlanItem,
+  RehabPlanStatus,
   ReportSummary,
   TremorMetricSummary,
   TremorTrendPoint,
@@ -107,6 +121,51 @@ interface BackendMedicationResponse {
   medication_entries: MedicationEntry[]
 }
 
+interface BackendRehabPlanItem {
+  template_id: string
+  name: string
+  category: string
+  duration_minutes: number
+  frequency_label: string
+  cautions?: string[] | null
+}
+
+interface BackendRehabPlan {
+  id: string
+  title?: string | null
+  status: string
+  scenario: string
+  version: number
+  rationale: string
+  items: BackendRehabPlanItem[]
+  risk_flags?: Array<string | { label?: string | null; message?: string | null }> | null
+  requires_confirmation: boolean
+  generated_at?: string | null
+  confirmed_at?: string | null
+  activated_at?: string | null
+  difference_summary?: string | null
+}
+
+interface BackendRehabEvidenceSummary {
+  as_of_date?: string | null
+  evaluation_window?: string | null
+  medication_window_summary?: string | null
+  tremor_trend_summary?: string | null
+  signal_consistency?: string | null
+  explanation?: string | null
+  generation_eligibility?: string | null
+  missing_inputs?: Array<string | null> | null
+}
+
+interface BackendRehabGuidanceResponse {
+  active_plan?: BackendRehabPlan | null
+  candidate_plan?: BackendRehabPlan | null
+  evidence_summary?: BackendRehabEvidenceSummary | null
+  conflict_status?: string | null
+  disclaimer?: string | null
+  generated_at?: string | null
+}
+
 interface BackendReportsResponse {
   report_summaries: Array<{
     id: string
@@ -115,6 +174,99 @@ interface BackendReportsResponse {
     size: string
     status: string
   }>
+}
+
+interface BackendMedicalRecordArchiveSummary {
+  id: string
+  title: string
+  description?: string | null
+  created_at: string
+  updated_at: string
+  file_count: number
+  report_count: number
+  latest_activity_at?: string | null
+  latest_report?: {
+    id: string
+    version: number
+    status: MedicalRecordProcessingStatus
+  } | null
+}
+
+interface BackendMedicalRecordExtraction {
+  id: string
+  version: number
+  status: MedicalRecordProcessingStatus
+  document_type?: string | null
+  summary_text?: string | null
+  raw_text?: string | null
+  structured_payload?: Record<string, unknown> | null
+  source_model?: string | null
+  prompt_version?: string | null
+  completed_at?: string | null
+  updated_at: string
+  error_summary?: string | null
+}
+
+interface BackendMedicalRecordFile {
+  id: string
+  archive_id: string
+  original_filename: string
+  content_type: string
+  size_bytes: number
+  processing_status: MedicalRecordProcessingStatus
+  processing_error?: string | null
+  created_at: string
+  updated_at: string
+  processed_at?: string | null
+  latest_extraction?: BackendMedicalRecordExtraction | null
+}
+
+interface BackendMedicalRecordReportSummary {
+  id: string
+  archive_id: string
+  archive_title?: string | null
+  version: number
+  title: string
+  status: MedicalRecordProcessingStatus
+  generated_at?: string | null
+  summary?: string | null
+  pdf_ready: boolean
+  pdf_file_name?: string | null
+  report_window_label?: string | null
+}
+
+interface BackendMedicalRecordArchiveDetailResponse {
+  archive: BackendMedicalRecordArchiveSummary & {
+    disclaimer: string
+    files: BackendMedicalRecordFile[]
+    reports: BackendMedicalRecordReportSummary[]
+  }
+}
+
+interface BackendMedicalRecordArchivesResponse {
+  archives: BackendMedicalRecordArchiveSummary[]
+}
+
+interface BackendMedicalRecordReportDetailResponse {
+  report: BackendMedicalRecordReportSummary & {
+    archive_description?: string | null
+    disclaimer: string
+    sections?: Array<{
+      id?: string | null
+      title: string
+      body: string
+    }> | null
+    source_files?: BackendMedicalRecordFile[] | null
+    history?: BackendMedicalRecordReportSummary[] | null
+    input_snapshot?: {
+      report_window?: string | { start?: string | null; end?: string | null } | null
+      monitoring_window?: string | { start?: string | null; end?: string | null } | null
+      medication_window?: string | { start?: string | null; end?: string | null } | null
+      disclaimer_version?: string | null
+      prompt_version?: string | null
+      model_version?: string | null
+    } | null
+  }
 }
 
 interface BackendProfileUpsertResponse {
@@ -247,6 +399,245 @@ function mapDeviceBinding(binding: BackendDeviceBinding | null): DeviceBinding |
     bindingStatus: binding.binding_status,
     boundAt: binding.bound_at,
     unboundAt: binding.unbound_at,
+  }
+}
+
+function toSizeLabel(bytes?: number | null) {
+  if (!bytes || bytes <= 0) {
+    return '未知大小'
+  }
+
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  if (bytes >= 1024) {
+    return `${Math.round(bytes / 1024)} KB`
+  }
+
+  return `${bytes} B`
+}
+
+function mapMedicalRecordArchiveSummary(
+  archive: BackendMedicalRecordArchiveSummary,
+): MedicalRecordArchiveSummary {
+  return {
+    id: archive.id,
+    title: archive.title,
+    description: archive.description,
+    createdAt: archive.created_at,
+    updatedAt: archive.updated_at,
+    fileCount: archive.file_count,
+    reportCount: archive.report_count,
+    latestActivityAt: archive.latest_activity_at,
+    latestReportId: archive.latest_report?.id ?? null,
+    latestReportVersion: archive.latest_report?.version ?? null,
+    latestReportStatus: archive.latest_report?.status ?? null,
+  }
+}
+
+function mapMedicalRecordExtraction(
+  extraction: BackendMedicalRecordExtraction | null | undefined,
+) {
+  if (!extraction) {
+    return null
+  }
+
+  return {
+    status: extraction.status,
+    summary: extraction.summary_text,
+    highlights: Array.isArray(extraction.structured_payload?.information_gaps)
+      ? extraction.structured_payload.information_gaps.map((item) => String(item))
+      : [],
+    extractedAt: extraction.completed_at,
+    errorSummary: extraction.error_summary,
+  }
+}
+
+function mapMedicalRecordFile(file: BackendMedicalRecordFile): MedicalRecordFile {
+  return {
+    id: file.id,
+    archiveId: file.archive_id,
+    fileName: file.original_filename,
+    fileType: file.content_type,
+    sizeLabel: toSizeLabel(file.size_bytes),
+    uploadedAt: file.created_at,
+    processingStatus: file.processing_status,
+    previewUrl: `${API_BASE_URL}/v1/medical-records/archives/${file.archive_id}/files/${file.id}/content`,
+    statusSummary: file.processing_error ?? undefined,
+    extraction: mapMedicalRecordExtraction(file.latest_extraction),
+  }
+}
+
+function mapMedicalRecordReportSummary(
+  report: BackendMedicalRecordReportSummary,
+  archiveTitleFallback = '',
+): MedicalRecordReportSummary {
+  return {
+    id: report.id,
+    archiveId: report.archive_id,
+    archiveTitle: report.archive_title ?? archiveTitleFallback,
+    version: report.version,
+    title: report.title,
+    status: report.status,
+    generatedAt: report.generated_at,
+    summary: report.summary,
+    pdfReady: report.pdf_ready,
+    pdfFileName: report.pdf_file_name,
+    reportWindowLabel: report.report_window_label,
+  }
+}
+
+function mapMedicalRecordInputSnapshot(
+  snapshot: BackendMedicalRecordReportDetailResponse['report']['input_snapshot'],
+): MedicalRecordInputSnapshot | null {
+  if (!snapshot) {
+    return null
+  }
+
+  const formatWindow = (
+    value?: string | { start?: string | null; end?: string | null } | null,
+  ) => {
+    if (!value) {
+      return null
+    }
+
+    if (typeof value === 'string') {
+      return value
+    }
+
+    if (value.start && value.end) {
+      return `${value.start} 至 ${value.end}`
+    }
+
+    return value.start ?? value.end ?? null
+  }
+
+  return {
+    reportWindow: formatWindow(snapshot.report_window),
+    monitoringWindow: formatWindow(snapshot.monitoring_window),
+    medicationWindow: formatWindow(snapshot.medication_window),
+    disclaimerVersion: snapshot.disclaimer_version,
+    promptVersion: snapshot.prompt_version,
+    modelVersion: snapshot.model_version,
+  }
+}
+
+function mapRiskLabel(
+  riskFlag: string | { label?: string | null; message?: string | null } | null | undefined,
+) {
+  if (!riskFlag) {
+    return null
+  }
+
+  if (typeof riskFlag === 'string') {
+    return riskFlag
+  }
+
+  return riskFlag.message ?? riskFlag.label ?? null
+}
+
+function mapRehabPlanStatus(status: string): RehabPlanStatus {
+  switch (status) {
+    case 'active_only':
+    case 'candidate_pending_confirmation':
+    case 'candidate_confirmed':
+    case 'candidate_superseded':
+      return status
+    default:
+      return 'candidate_pending_confirmation'
+  }
+}
+
+function mapRehabPlanItem(item: BackendRehabPlanItem): RehabPlanItem {
+  return {
+    templateId: item.template_id,
+    name: item.name,
+    category: item.category,
+    durationMinutes: item.duration_minutes,
+    frequencyLabel: item.frequency_label,
+    cautions: (item.cautions ?? []).map((caution) => String(caution)),
+  }
+}
+
+function mapRehabPlan(plan: BackendRehabPlan | null | undefined): RehabPlan | null {
+  if (!plan) {
+    return null
+  }
+
+  return {
+    id: plan.id,
+    title: plan.title ?? '个性化训练计划',
+    status: mapRehabPlanStatus(plan.status),
+    scenario: plan.scenario,
+    version: plan.version,
+    rationale: plan.rationale,
+    items: plan.items.map(mapRehabPlanItem),
+    riskFlags: (plan.risk_flags ?? [])
+      .map((riskFlag) => mapRiskLabel(riskFlag))
+      .filter((riskFlag): riskFlag is string => Boolean(riskFlag)),
+    requiresConfirmation: plan.requires_confirmation,
+    generatedAt: plan.generated_at,
+    confirmedAt: plan.confirmed_at,
+    activatedAt: plan.activated_at,
+  }
+}
+
+function mapRehabConflictStatus(status?: string | null): RehabConflictStatus {
+  switch (status) {
+    case 'consistent':
+    case 'conflicting':
+    case 'insufficient_data':
+      return status
+    default:
+      return 'unknown'
+  }
+}
+
+function mapRehabGenerationEligibility(
+  status?: string | null,
+): RehabGenerationEligibility {
+  return status === 'eligible' ? 'eligible' : 'insufficient_data'
+}
+
+function mapRehabGuidanceResponse(
+  payload: BackendRehabGuidanceResponse,
+): RehabGuidanceViewData {
+  if (
+    !payload.disclaimer ||
+    !payload.evidence_summary?.as_of_date ||
+    !payload.evidence_summary.evaluation_window ||
+    !payload.evidence_summary.medication_window_summary ||
+    !payload.evidence_summary.tremor_trend_summary ||
+    !payload.evidence_summary.signal_consistency ||
+    !payload.evidence_summary.explanation ||
+    !payload.conflict_status ||
+    !payload.evidence_summary.generation_eligibility ||
+    !Array.isArray(payload.evidence_summary.missing_inputs)
+  ) {
+    throw new ApiError(500, '康复训练计划响应缺少必要字段，暂时无法渲染页面。')
+  }
+
+  return {
+    activePlan: mapRehabPlan(payload.active_plan),
+    candidatePlan: mapRehabPlan(payload.candidate_plan),
+    evidenceSummary: {
+      asOfDate: payload.evidence_summary.as_of_date,
+      evaluationWindow: payload.evidence_summary.evaluation_window,
+      medicationWindowSummary: payload.evidence_summary.medication_window_summary,
+      tremorTrendSummary: payload.evidence_summary.tremor_trend_summary,
+      signalConsistency: payload.evidence_summary.signal_consistency,
+      explanation: payload.evidence_summary.explanation,
+    },
+    conflictStatus: mapRehabConflictStatus(payload.conflict_status),
+    disclaimer: payload.disclaimer,
+    generatedAt: payload.generated_at,
+    generationEligibility: mapRehabGenerationEligibility(
+      payload.evidence_summary.generation_eligibility,
+    ),
+    missingInputs: payload.evidence_summary.missing_inputs
+      .map((input) => (input ? String(input) : null))
+      .filter((input): input is string => Boolean(input)),
   }
 }
 
@@ -390,7 +781,8 @@ async function authenticatedFetch(path: string, init?: RequestInit, retry = true
     throw new ApiError(401, '会话已过期，请重新登录。')
   }
 
-  const headers = buildRequestHeaders(init?.headers, Boolean(init?.body))
+  const includeJson = Boolean(init?.body) && !(init?.body instanceof FormData)
+  const headers = buildRequestHeaders(init?.headers, includeJson)
   headers.set('Authorization', `Bearer ${session.accessToken}`)
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -538,6 +930,143 @@ export async function createReport(date = DEFAULT_DATA_DATE) {
     body: JSON.stringify({ report_date: date }),
   })
   return parseJson(response)
+}
+
+export async function getMedicalRecordArchives(): Promise<MedicalRecordArchiveSummary[]> {
+  const response = await authenticatedFetch('/v1/medical-records/archives')
+  const payload = await parseJson<BackendMedicalRecordArchivesResponse>(response)
+  return payload.archives.map(mapMedicalRecordArchiveSummary)
+}
+
+export async function createMedicalRecordArchive(payload: {
+  title: string
+  description?: string
+}): Promise<MedicalRecordArchiveDetail> {
+  const response = await authenticatedFetch('/v1/medical-records/archives', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  const result = await parseJson<BackendMedicalRecordArchiveDetailResponse>(response)
+
+  return {
+    ...mapMedicalRecordArchiveSummary(result.archive),
+    disclaimer: result.archive.disclaimer,
+    files: result.archive.files.map(mapMedicalRecordFile),
+    reports: result.archive.reports.map((report) =>
+      mapMedicalRecordReportSummary(report, result.archive.title),
+    ),
+  }
+}
+
+export async function getMedicalRecordArchive(archiveId: string): Promise<MedicalRecordArchiveDetail> {
+  const response = await authenticatedFetch(`/v1/medical-records/archives/${archiveId}`)
+  const payload = await parseJson<BackendMedicalRecordArchiveDetailResponse['archive']>(response)
+
+  return {
+    ...mapMedicalRecordArchiveSummary(payload),
+    disclaimer: payload.disclaimer,
+    files: payload.files.map(mapMedicalRecordFile),
+    reports: payload.reports.map((report) =>
+      mapMedicalRecordReportSummary(report, payload.title),
+    ),
+  }
+}
+
+export async function uploadMedicalRecordFiles(archiveId: string, files: File[]) {
+  const body = new FormData()
+  files.forEach((file) => {
+    body.append('files', file)
+  })
+
+  const response = await authenticatedFetch(`/v1/medical-records/archives/${archiveId}/files`, {
+    method: 'POST',
+    body,
+  })
+
+  return parseJson(response)
+}
+
+export async function createMedicalRecordReport(
+  archiveId: string,
+): Promise<MedicalRecordReportSummary> {
+  const response = await authenticatedFetch(`/v1/medical-records/archives/${archiveId}/reports`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  const payload = await parseJson<BackendMedicalRecordReportDetailResponse>(response)
+  return mapMedicalRecordReportSummary(payload.report)
+}
+
+export async function getMedicalRecordReport(reportId: string): Promise<MedicalRecordReportDetail> {
+  const response = await authenticatedFetch(`/v1/medical-records/reports/${reportId}`)
+  const payload = await parseJson<BackendMedicalRecordReportDetailResponse['report']>(response)
+
+  const sections: MedicalRecordReportSection[] = (payload.sections ?? []).map(
+    (section, index) => ({
+      id: section.id ?? `${payload.id}-section-${index}`,
+      title: section.title,
+      body: section.body,
+    }),
+  )
+
+  return {
+    ...mapMedicalRecordReportSummary(payload),
+    disclaimer: payload.disclaimer,
+    archiveDescription: payload.archive_description,
+    sections,
+    sourceFiles: (payload.source_files ?? []).map(mapMedicalRecordFile),
+    history: (payload.history ?? []).map((report) =>
+      mapMedicalRecordReportSummary(report, payload.archive_title ?? ''),
+    ),
+    inputSnapshot: mapMedicalRecordInputSnapshot(payload.input_snapshot),
+  }
+}
+
+export async function getRehabGuidance(
+  asOfDate = DEFAULT_DATA_DATE,
+): Promise<RehabGuidanceViewData> {
+  const response = await authenticatedFetch(`/v1/rehab-guidance?as_of_date=${asOfDate}`)
+  const payload = await parseJson<BackendRehabGuidanceResponse>(response)
+  return mapRehabGuidanceResponse(payload)
+}
+
+export async function generateRehabGuidance(
+  asOfDate = DEFAULT_DATA_DATE,
+): Promise<RehabGuidanceViewData> {
+  const response = await authenticatedFetch('/v1/rehab-guidance/generate', {
+    method: 'POST',
+    body: JSON.stringify({ as_of_date: asOfDate }),
+  })
+  const payload = await parseJson<BackendRehabGuidanceResponse>(response)
+  return mapRehabGuidanceResponse(payload)
+}
+
+export async function confirmRehabGuidancePlan(planId: string): Promise<RehabGuidanceViewData> {
+  const response = await authenticatedFetch(`/v1/rehab-guidance/${planId}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  const payload = await parseJson<BackendRehabGuidanceResponse>(response)
+  return mapRehabGuidanceResponse(payload)
+}
+
+export async function downloadMedicalRecordReportPdf(reportId: string, fileName?: string) {
+  const response = await authenticatedFetch(`/v1/medical-records/reports/${reportId}/pdf`)
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new ApiError(response.status, detail || 'PDF 下载失败。')
+  }
+
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName ?? `medical-record-report-${reportId}.pdf`
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 export async function sendAiChat(messages: ChatMessage[]): Promise<AiChatResult> {

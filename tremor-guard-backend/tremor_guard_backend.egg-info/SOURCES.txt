@@ -11,7 +11,9 @@ app/api/routes/dashboard.py
 app/api/routes/devices.py
 app/api/routes/ingest.py
 app/api/routes/me.py
+app/api/routes/medical_records.py
 app/api/routes/medications.py
+app/api/routes/rehab_guidance.py
 app/api/routes/reports.py
 app/core/__init__.py
 app/core/config.py
@@ -32,10 +34,13 @@ app/services/__init__.py
 app/services/ai_chat.py
 app/services/audit.py
 app/services/dashboard.py
+app/services/medical_records.py
+app/services/rehab_guidance.py
 app/services/seeds.py
 app/services/user_management.py
 app/tests/conftest.py
 app/tests/test_api.py
+app/tests/test_rehab_guidance.py
 tremor_guard_backend.egg-info/PKG-INFO
 tremor_guard_backend.egg-info/SOURCES.txt
 tremor_guard_backend.egg-info/dependency_links.txt

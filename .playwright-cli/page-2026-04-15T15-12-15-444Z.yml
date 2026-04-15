@@ -1,0 +1,30 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - img [ref=e8]
+        - text: TremorGuard Patient Access
+      - heading "登录后继续查看震颤趋势、用药记录与设备状态。" [level=1] [ref=e10]
+      - paragraph [ref=e11]: 一期用户体系以患者自助使用为核心。首次注册后会先完成资料补全，再绑定手环进入工作台。
+    - generic [ref=e12]:
+      - paragraph [ref=e13]: 演示账号
+      - paragraph [ref=e14]: "邮箱: patient@tremorguard.local"
+      - paragraph [ref=e15]: "密码: tg-demo-password"
+  - generic [ref=e17]:
+    - generic [ref=e18]:
+      - paragraph [ref=e19]: Patient Sign In
+      - heading "欢迎回来" [level=2] [ref=e20]
+      - paragraph [ref=e21]: 使用邮箱与密码恢复您的监测会话。
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]: 邮箱
+        - textbox "邮箱" [ref=e25]: patient@tremorguard.local
+      - generic [ref=e26]:
+        - generic [ref=e27]: 密码
+        - textbox "密码" [ref=e28]: tg-demo-password
+      - generic [ref=e32]: Failed to fetch
+      - button "登录" [ref=e29]
+    - paragraph [ref=e30]:
+      - text: 还没有账号？
+      - link "立即注册" [ref=e31] [cursor=pointer]:
+        - /url: /register

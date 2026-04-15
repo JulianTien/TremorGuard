@@ -1,11 +1,15 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AiDoctorPage } from './pages/ai-doctor-page'
 import { LoginPage } from './pages/login-page'
+import { MedicalRecordArchivePage } from './pages/medical-record-archive-page'
+import { MedicalRecordReportPage } from './pages/medical-record-report-page'
+import { MedicalRecordsPage } from './pages/medical-records-page'
 import { MedicationPage } from './pages/medication-page'
 import { OnboardingDeviceBindingPage } from './pages/onboarding-device-binding-page'
 import { OnboardingProfilePage } from './pages/onboarding-profile-page'
 import { OverviewPage } from './pages/overview-page'
 import { ProfilePage } from './pages/profile-page'
+import { RehabGuidancePage } from './pages/rehab-guidance-page'
 import { RegisterPage } from './pages/register-page'
 import { ReportsPage } from './pages/reports-page'
 import { OnboardingGuard, ProtectedAppLayout, PublicOnlyLayout } from './router-guards'
@@ -42,6 +46,10 @@ export const router = createBrowserRouter([
       { path: 'overview', element: <OverviewPage /> },
       { path: 'ai-doctor', element: <AiDoctorPage /> },
       { path: 'medication', element: <MedicationPage /> },
+      { path: 'rehab-guidance', element: <RehabGuidancePage /> },
+      { path: 'records', element: <MedicalRecordsPage /> },
+      { path: 'records/reports/:reportId', element: <MedicalRecordReportPage /> },
+      { path: 'records/:archiveId', element: <MedicalRecordArchivePage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'profile', element: <ProfilePage /> },
     ],

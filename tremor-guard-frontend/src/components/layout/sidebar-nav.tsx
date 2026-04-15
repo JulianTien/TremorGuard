@@ -1,8 +1,10 @@
 import {
   Activity,
   FileText,
+  FolderOpenDot,
   MessageSquare,
   Pill,
+  Sparkles,
   User,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -21,7 +23,9 @@ const navItems: NavItem[] = [
   { key: 'overview', label: '总览仪表盘', path: '/overview', icon: Activity },
   { key: 'ai-doctor', label: 'AI 医生', path: '/ai-doctor', icon: MessageSquare },
   { key: 'medication', label: '用药记录', path: '/medication', icon: Pill },
-  { key: 'reports', label: '报告中心', path: '/reports', icon: FileText },
+  { key: 'rehab-guidance', label: '康复训练计划', path: '/rehab-guidance', icon: Sparkles },
+  { key: 'medical-records', label: '病历档案', path: '/records', icon: FolderOpenDot },
+  { key: 'reports', label: '监测摘要报告', path: '/reports', icon: FileText },
   { key: 'profile', label: '个人中心', path: '/profile', icon: User },
 ]
 

@@ -1,20 +1,51 @@
-import { useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/auth-context'
 
-const titleMap: Record<string, string> = {
-  '/overview': '总览仪表盘',
-  '/ai-doctor': 'AI 医生',
-  '/medication': '用药记录',
-  '/reports': '报告中心',
-  '/profile': '个人中心',
+function resolvePageTitle(pathname: string) {
+  if (pathname.startsWith('/records/reports/')) {
+    return '病历联合健康报告'
+  }
+
+  if (pathname.startsWith('/records/')) {
+    return '病历档案详情'
+  }
+
+  if (pathname === '/records') {
+    return '病历档案'
+  }
+
+  if (pathname === '/overview') {
+    return '总览仪表盘'
+  }
+
+  if (pathname === '/ai-doctor') {
+    return 'AI 医生'
+  }
+
+  if (pathname === '/medication') {
+    return '用药记录'
+  }
+
+  if (pathname === '/rehab-guidance') {
+    return '个性化训练计划'
+  }
+
+  if (pathname === '/reports') {
+    return '监测摘要报告'
+  }
+
+  if (pathname === '/profile') {
+    return '个人中心'
+  }
+
+  return '患者工作台'
 }
 
 export function TopBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { currentUser, logout } = useAuth()
-  const pageTitle = useMemo(() => titleMap[location.pathname] ?? '患者工作台', [location.pathname])
+  const pageTitle = resolvePageTitle(location.pathname)
   const realtime = location.pathname === '/overview'
 
   async function handleLogout() {

@@ -13,12 +13,19 @@ from app.models.clinical import (
     DeviceStatusSnapshot,
     MedicationLog,
     PatientProfile,
+    RehabPlan,
+    RehabPlanTemplate,
     ReportRecord,
     TremorEvent,
 )
 from app.models.identity import AuthCredential, User
 
 settings = get_settings()
+
+REHAB_DISCLAIMER = (
+    "本计划仅用于日常康复参考，不涉及诊断、处方或药物调整；"
+    "如今日状态明显异常，请联系线下医疗团队。"
+)
 
 
 def seed_identity(session: Session) -> str:
@@ -48,8 +55,12 @@ def seed_identity(session: Session) -> str:
 
 
 def seed_clinical(session: Session, user_id: str) -> None:
+    seed_rehab_guidance_templates(session)
+
     profile = session.scalar(select(PatientProfile).where(PatientProfile.user_id == user_id))
     if profile:
+        seed_active_rehab_plan(session, user_id)
+        session.commit()
         return
 
     profile = PatientProfile(
@@ -177,4 +188,141 @@ def seed_clinical(session: Session, user_id: str) -> None:
         ReportRecord(id="R-20260301", user_id=user_id, report_date=date(2026, 3, 1), report_type="月度长程震颤趋势报告", size_label="3.4 MB", status="ready"),
     ]
     session.add_all(reports)
+
+    seed_active_rehab_plan(session, user_id)
     session.commit()
+
+
+def seed_rehab_guidance_templates(session: Session) -> None:
+    existing_template = session.scalar(select(RehabPlanTemplate).limit(1))
+    if existing_template:
+        return
+
+    templates = [
+        RehabPlanTemplate(
+            template_key="daily-base-breathing",
+            name="呼吸放松热身",
+            category="warmup",
+            scenario_key="daily_base",
+            intensity="low",
+            duration_minutes=8,
+            frequency_label="每日 2 次",
+            cautions=["请在坐姿稳定后开始", "如出现头晕请暂停"],
+            sort_order=10,
+        ),
+        RehabPlanTemplate(
+            template_key="stable-rhythm-open-close",
+            name="节律开合训练",
+            category="upper_limb",
+            scenario_key="stable_support",
+            intensity="low",
+            duration_minutes=12,
+            frequency_label="每日 2 次",
+            cautions=["保持动作缓慢均匀", "如疲劳明显请缩短时长"],
+            sort_order=20,
+        ),
+        RehabPlanTemplate(
+            template_key="moderate-posture-reset",
+            name="躯干姿势重置",
+            category="posture",
+            scenario_key="moderate_adjustment",
+            intensity="moderate",
+            duration_minutes=15,
+            frequency_label="每日 2 次",
+            cautions=["避免快速转体", "站立不稳时请扶靠桌面"],
+            sort_order=30,
+        ),
+        RehabPlanTemplate(
+            template_key="moderate-weight-shift",
+            name="重心转移练习",
+            category="balance",
+            scenario_key="moderate_adjustment",
+            intensity="moderate",
+            duration_minutes=10,
+            frequency_label="每日 1 次",
+            cautions=["请在安全支撑环境下完成", "如步态不稳请减少幅度"],
+            sort_order=40,
+        ),
+        RehabPlanTemplate(
+            template_key="high-segmented-lift",
+            name="分段缓慢抬手训练",
+            category="upper_limb",
+            scenario_key="high_support",
+            intensity="low",
+            duration_minutes=10,
+            frequency_label="每日 2 次",
+            cautions=["每次只做小幅度动作", "如震颤明显加重请立即停止"],
+            sort_order=50,
+        ),
+        RehabPlanTemplate(
+            template_key="high-seated-gait-prep",
+            name="坐姿步态预备训练",
+            category="mobility",
+            scenario_key="high_support",
+            intensity="low",
+            duration_minutes=8,
+            frequency_label="每日 1 次",
+            cautions=["全程保持坐姿", "站起前先确认头晕与疲劳情况"],
+            sort_order=60,
+        ),
+    ]
+    session.add_all(templates)
+    session.flush()
+
+
+def seed_active_rehab_plan(session: Session, user_id: str) -> None:
+    existing_plan = session.scalar(select(RehabPlan).where(RehabPlan.user_id == user_id, RehabPlan.is_current_active.is_(True)))
+    if existing_plan:
+        return
+
+    templates = list(
+        session.scalars(
+            select(RehabPlanTemplate)
+            .where(RehabPlanTemplate.template_key.in_(("daily-base-breathing", "stable-rhythm-open-close")))
+            .order_by(RehabPlanTemplate.sort_order)
+        )
+    )
+    if not templates:
+        return
+
+    session.add(
+        RehabPlan(
+            user_id=user_id,
+            as_of_date=date(2026, 4, 4),
+            evaluation_window="calendar_day",
+            status="active_only",
+            scenario="stable_support",
+            title="基础维持训练方案",
+            version=1,
+            rationale="当前激活方案用于维持日常康复节奏，训练内容来自预设模板。",
+            disclaimer=REHAB_DISCLAIMER,
+            conflict_status="consistent",
+            risk_flags=[],
+            requires_confirmation=False,
+            is_current_active=True,
+            evidence_snapshot={
+                "summary": {
+                    "as_of_date": "2026-04-04",
+                    "evaluation_window": "calendar_day",
+                    "signal_consistency": "consistent",
+                }
+            },
+            plan_payload={
+                "items": [
+                    {
+                        "template_id": template.id,
+                        "name": template.name,
+                        "category": template.category,
+                        "duration_minutes": template.duration_minutes,
+                        "frequency_label": template.frequency_label,
+                        "cautions": template.cautions,
+                    }
+                    for template in templates
+                ],
+                "difference_summary": "当前激活方案为基线训练组合。",
+            },
+            generated_at=datetime(2026, 4, 4, 7, 0, tzinfo=UTC),
+            activated_at=datetime(2026, 4, 4, 7, 5, tzinfo=UTC),
+            confirmed_at=datetime(2026, 4, 4, 7, 5, tzinfo=UTC),
+        )
+    )

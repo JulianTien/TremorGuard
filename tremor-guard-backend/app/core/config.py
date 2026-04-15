@@ -19,8 +19,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
         "http://localhost:4173",
         "http://127.0.0.1:4173",
+        "http://localhost:4174",
+        "http://127.0.0.1:4174",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
@@ -34,8 +38,13 @@ class Settings(BaseSettings):
     dashscope_api_key: SecretStr | None = None
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     dashscope_chat_model: str = "qwen-plus"
+    dashscope_medical_extraction_model: str = "qwen-vl-plus"
+    dashscope_medical_report_model: str = "qwen-plus"
+    dashscope_medical_prompt_version: str = "medical-records-v1"
     dashscope_timeout_seconds: float = 60.0
     dashscope_enable_search: bool = False
+    medical_records_storage_dir: str = "./storage/medical_records"
+    medical_records_max_upload_bytes: int = 5_000_000
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -1,7 +1,10 @@
+import json
+
 from pydantic import SecretStr
 
 from app.core.config import get_settings
 from app.services import ai_chat as ai_chat_service
+from app.services import medical_records as medical_records_service
 
 
 def login(client):
@@ -119,11 +122,20 @@ def test_reports_creation_and_listing(client):
 
     list_response = client.get("/v1/reports", headers=headers)
     assert list_response.status_code == 200
-    assert len(list_response.json()["report_summaries"]) == 3
+    initial_count = len(list_response.json()["report_summaries"])
+    assert initial_count == 3
 
     create_response = client.post("/v1/reports", headers=headers, json={"report_date": "2026-04-06"})
     assert create_response.status_code == 201
     assert create_response.json()["report"]["status"] == "pending"
+
+    refreshed = client.get("/v1/reports", headers=headers)
+    assert refreshed.status_code == 200
+    assert len(refreshed.json()["report_summaries"]) == initial_count + 1
+
+    archives_response = client.get("/v1/medical-records/archives", headers=headers)
+    assert archives_response.status_code == 200
+    assert archives_response.json()["archives"] == []
 
 
 def test_ingest_endpoint_is_idempotent(client):
@@ -274,3 +286,198 @@ def test_ai_chat_requires_dashscope_api_key(client, monkeypatch):
 
     assert response.status_code == 503
     assert "DASHSCOPE_API_KEY" in response.json()["detail"]
+
+
+def _mock_medical_records_dashscope(monkeypatch):
+    def fake_post(payload):
+        model = payload["model"]
+        settings = get_settings()
+        if model == settings.dashscope_medical_extraction_model:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "document_type": "门诊病历",
+                                    "summary_text": "病例提示近两年持续存在震颤症状，建议整理既往检查结果并结合近期监测趋势复诊沟通。",
+                                    "raw_text": "门诊记录：双上肢静止性震颤，症状波动，建议定期复诊。",
+                                    "structured_payload": {
+                                        "institution": "上海市第一人民医院",
+                                        "visit_date": "2026-03-18",
+                                        "diagnoses_mentioned": ["帕金森相关震颤待评估"],
+                                        "medications_mentioned": ["多巴丝肼片"],
+                                        "exams_mentioned": ["门诊查体"],
+                                        "symptoms_mentioned": ["静止性震颤", "下午波动"],
+                                        "information_gaps": ["缺少影像检查原文"],
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+        if model == settings.dashscope_medical_report_model:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "title": "病历联合健康报告",
+                                    "executive_summary": "结合历史病例与近期 TremorGuard 监测，当前更适合围绕症状波动与复诊准备做连续观察。",
+                                    "historical_record_summary": [
+                                        "历史病历主要记录静止性震颤与症状波动。"
+                                    ],
+                                    "monitoring_observations": [
+                                        "最近监测窗口内存在午后震颤幅度升高的现象。"
+                                    ],
+                                    "medication_observations": [
+                                        "服药后数小时内仍可见一定波动，建议复诊时结合记录沟通。"
+                                    ],
+                                    "information_gaps": ["缺少影像检查原文"],
+                                    "doctor_discussion_points": [
+                                        "复诊时可重点沟通午后震颤波动与既往病历中的症状描述是否一致。"
+                                    ],
+                                    "non_diagnostic_notice": medical_records_service.DISCLAIMER_TEXT,
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+        raise AssertionError(f"unexpected model {model}")
+
+    monkeypatch.setattr(medical_records_service, "_post_dashscope", fake_post)
+
+
+def test_medical_records_archive_upload_report_pdf_flow(client, monkeypatch):
+    _mock_medical_records_dashscope(monkeypatch)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    create_archive = client.post(
+        "/v1/medical-records/archives",
+        headers=headers,
+        json={"title": "神经内科既往病历", "description": "用于长期追踪"},
+    )
+    assert create_archive.status_code == 201
+    archive = create_archive.json()["archive"]
+    assert archive["file_count"] == 0
+    archive_id = archive["id"]
+
+    upload_response = client.post(
+        f"/v1/medical-records/archives/{archive_id}/files",
+        headers=headers,
+        files=[("files", ("record.png", b"\x89PNG\r\n\x1a\nfake-image", "image/png"))],
+    )
+    assert upload_response.status_code == 201
+    uploaded_file = upload_response.json()["files"][0]
+    assert uploaded_file["processing_status"] == "queued"
+
+    archive_detail = client.get(f"/v1/medical-records/archives/{archive_id}", headers=headers)
+    assert archive_detail.status_code == 200
+    detail_body = archive_detail.json()
+    assert detail_body["file_count"] == 1
+    assert detail_body["files"][0]["processing_status"] == "succeeded"
+    assert detail_body["files"][0]["latest_extraction"]["document_type"] == "门诊病历"
+
+    create_report = client.post(
+        f"/v1/medical-records/archives/{archive_id}/reports",
+        headers={**headers, "Idempotency-Key": "report-create-1"},
+        json={"report_window_days": 30, "monitoring_window_days": 21, "medication_window_days": 14},
+    )
+    assert create_report.status_code == 201
+    report_summary = create_report.json()["report"]
+    assert report_summary["status"] == "queued"
+    assert report_summary["version"] == 1
+    report_id = report_summary["id"]
+
+    report_detail = client.get(f"/v1/medical-records/reports/{report_id}", headers=headers)
+    assert report_detail.status_code == 200
+    report_body = report_detail.json()
+    assert report_body["status"] == "succeeded"
+    assert report_body["pdf_status"] == "succeeded"
+    assert report_body["report_payload"]["non_diagnostic_notice"] == medical_records_service.DISCLAIMER_TEXT
+    assert "report_window" in report_body["input_snapshot"]
+    assert "selected_extraction_versions" in report_body["input_snapshot"]
+
+    report_list = client.get(f"/v1/medical-records/archives/{archive_id}/reports", headers=headers)
+    assert report_list.status_code == 200
+    assert len(report_list.json()["reports"]) == 1
+
+    pdf_response = client.get(f"/v1/medical-records/reports/{report_id}/pdf", headers=headers)
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["content-type"] == "application/pdf"
+    assert pdf_response.content.startswith(b"%PDF-1.4")
+
+
+def test_medical_records_report_versioning_and_access_control(client, monkeypatch):
+    _mock_medical_records_dashscope(monkeypatch)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    archive_response = client.post(
+        "/v1/medical-records/archives",
+        headers=headers,
+        json={"title": "长期病历档案"},
+    )
+    archive_id = archive_response.json()["archive"]["id"]
+
+    for name in ("record-1.png", "record-2.png"):
+        upload = client.post(
+            f"/v1/medical-records/archives/{archive_id}/files",
+            headers=headers,
+            files=[("files", (name, b"\x89PNG\r\n\x1a\nflow", "image/png"))],
+        )
+        assert upload.status_code == 201
+
+    first_report = client.post(
+        f"/v1/medical-records/archives/{archive_id}/reports",
+        headers=headers,
+        json={"report_window_days": 30, "monitoring_window_days": 30, "medication_window_days": 30},
+    )
+    assert first_report.status_code == 201
+    assert first_report.json()["report"]["version"] == 1
+
+    second_report = client.post(
+        f"/v1/medical-records/archives/{archive_id}/reports",
+        headers=headers,
+        json={"report_window_days": 45, "monitoring_window_days": 30, "medication_window_days": 30},
+    )
+    assert second_report.status_code == 201
+    assert second_report.json()["report"]["version"] == 2
+
+    report_rows = client.get(f"/v1/medical-records/archives/{archive_id}/reports", headers=headers)
+    assert report_rows.status_code == 200
+    assert [item["version"] for item in report_rows.json()["reports"]] == [2, 1]
+
+    other_user = register(client, "records-access@tremorguard.local", display_name="隔离用户")
+    other_headers = auth_headers(other_user["access_token"])
+    detail_response = client.get(f"/v1/medical-records/archives/{archive_id}", headers=other_headers)
+    assert detail_response.status_code == 404
+
+    report_id = second_report.json()["report"]["id"]
+    report_response = client.get(f"/v1/medical-records/reports/{report_id}", headers=other_headers)
+    assert report_response.status_code == 404
+
+
+def test_medical_records_reject_invalid_upload_format(client):
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+    archive_response = client.post(
+        "/v1/medical-records/archives",
+        headers=headers,
+        json={"title": "格式校验档案"},
+    )
+    archive_id = archive_response.json()["archive"]["id"]
+
+    upload = client.post(
+        f"/v1/medical-records/archives/{archive_id}/files",
+        headers=headers,
+        files=[("files", ("record.txt", b"not-an-image", "text/plain"))],
+    )
+    assert upload.status_code == 400
+    assert "仅支持" in upload.json()["detail"]

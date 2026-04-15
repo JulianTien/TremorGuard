@@ -146,3 +146,183 @@ class ApiAuditLog(ClinicalBase):
     response_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     risk_flag: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
+
+
+class RehabPlanTemplate(ClinicalBase):
+    __tablename__ = "rehab_plan_templates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    template_key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    category: Mapped[str] = mapped_column(String(100))
+    scenario_key: Mapped[str] = mapped_column(String(100), index=True)
+    intensity: Mapped[str] = mapped_column(String(30))
+    duration_minutes: Mapped[int] = mapped_column(Integer)
+    frequency_label: Mapped[str] = mapped_column(String(100))
+    cautions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class RehabPlan(ClinicalBase):
+    __tablename__ = "rehab_plans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    as_of_date: Mapped[date] = mapped_column(Date, index=True)
+    evaluation_window: Mapped[str] = mapped_column(String(30), default="calendar_day")
+    status: Mapped[str] = mapped_column(String(50), index=True)
+    scenario: Mapped[str] = mapped_column(String(100))
+    title: Mapped[str] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer)
+    rationale: Mapped[str] = mapped_column(Text())
+    disclaimer: Mapped[str] = mapped_column(Text())
+    conflict_status: Mapped[str] = mapped_column(String(30), default="consistent")
+    risk_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    requires_confirmation: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_current_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    evidence_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    plan_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    superseded_by_plan_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class MedicalRecordArchive(ClinicalBase):
+    __tablename__ = "medical_record_archives"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    consent_policy: Mapped[str] = mapped_column(String(100), default="rag_and_cloud_sync_required")
+    retention_policy: Mapped[str] = mapped_column(String(100), default="retain_until_user_deletion_request")
+    delete_policy: Mapped[str] = mapped_column(String(100), default="support_assisted_delete")
+    export_policy: Mapped[str] = mapped_column(String(100), default="pdf_export_only")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    files: Mapped[list["MedicalRecordFile"]] = relationship(back_populates="archive")
+    reports: Mapped[list["LongitudinalReport"]] = relationship(back_populates="archive")
+
+
+class MedicalRecordFile(ClinicalBase):
+    __tablename__ = "medical_record_files"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    archive_id: Mapped[str] = mapped_column(String(36), ForeignKey("medical_record_archives.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    original_filename: Mapped[str] = mapped_column(String(255))
+    stored_filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    storage_path: Mapped[str] = mapped_column(Text())
+    processing_status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    processing_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    archive: Mapped[MedicalRecordArchive] = relationship(back_populates="files")
+    extractions: Mapped[list["MedicalRecordExtraction"]] = relationship(back_populates="file")
+
+
+class MedicalRecordExtraction(ClinicalBase):
+    __tablename__ = "medical_record_extractions"
+    __table_args__ = (UniqueConstraint("file_id", "version", name="uq_medical_record_extraction_file_version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    archive_id: Mapped[str] = mapped_column(String(36), ForeignKey("medical_record_archives.id"), index=True)
+    file_id: Mapped[str] = mapped_column(String(36), ForeignKey("medical_record_files.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    error_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    summary_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    raw_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    structured_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    file: Mapped[MedicalRecordFile] = relationship(back_populates="extractions")
+
+
+class LongitudinalReport(ClinicalBase):
+    __tablename__ = "longitudinal_reports"
+    __table_args__ = (UniqueConstraint("archive_id", "version", name="uq_longitudinal_report_archive_version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    archive_id: Mapped[str] = mapped_column(String(36), ForeignKey("medical_record_archives.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    error_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), default="病历联合健康报告")
+    report_window_start: Mapped[date] = mapped_column(Date)
+    report_window_end: Mapped[date] = mapped_column(Date)
+    monitoring_window_start: Mapped[date] = mapped_column(Date)
+    monitoring_window_end: Mapped[date] = mapped_column(Date)
+    medication_window_start: Mapped[date] = mapped_column(Date)
+    medication_window_end: Mapped[date] = mapped_column(Date)
+    disclaimer_version: Mapped[str] = mapped_column(String(50), default="non-diagnostic-v1")
+    model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    report_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    narrative_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    pdf_status: Mapped[str] = mapped_column(String(20), default="queued")
+    pdf_path: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    archive: Mapped[MedicalRecordArchive] = relationship(back_populates="reports")
+    input_links: Mapped[list["ReportInputLink"]] = relationship(back_populates="report")
+
+
+class ReportInputLink(ClinicalBase):
+    __tablename__ = "report_input_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_id: Mapped[str] = mapped_column(String(36), ForeignKey("longitudinal_reports.id"), index=True)
+    archive_id: Mapped[str] = mapped_column(String(36), ForeignKey("medical_record_archives.id"), index=True)
+    input_type: Mapped[str] = mapped_column(String(30))
+    input_id: Mapped[str] = mapped_column(String(36), index=True)
+    input_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+    report: Mapped[LongitudinalReport] = relationship(back_populates="input_links")
