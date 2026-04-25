@@ -49,10 +49,53 @@ export interface AiInsight {
   emphasis?: string
 }
 
+export interface OverviewEvidenceReadiness {
+  hasDeviceBinding: boolean
+  hasMonitoringEvents: boolean
+  monitoringEventCount: number
+  hasMedicationLogs: boolean
+  medicationLogCount: number
+  hasMedicalRecordArchives: boolean
+  medicalRecordArchiveCount: number
+  aiInterpretationReady: boolean
+  rehabPlanReady: boolean
+  healthReportReady: boolean
+  nextSteps: string[]
+}
+
+export type AiChatActionKind =
+  | 'confirm_plan'
+  | 'view_plan_detail'
+  | 'download_plan_pdf'
+  | 'view_report_online'
+  | 'download_report_pdf'
+
+export interface AiChatAction {
+  key: string
+  label: string
+  kind: AiChatActionKind
+  apiPath?: string | null
+  url?: string | null
+  downloadName?: string | null
+}
+
+export interface AiChatActionCard {
+  type: 'rehab_plan_candidate' | 'health_report_candidate'
+  agentType?: string | null
+  title: string
+  summary: string
+  status: string
+  resourceId: string
+  resourcePath?: string | null
+  pipelineState?: MedicalRecordReportPipelineState | null
+  actions: AiChatAction[]
+}
+
 export interface ChatMessage {
   id: string | number
   role: 'assistant' | 'user'
   content: string
+  actionCards?: AiChatActionCard[]
 }
 
 export interface AiChatUsage {
@@ -86,6 +129,10 @@ export interface RehabPlanItem {
   durationMinutes: number
   frequencyLabel: string
   cautions: string[]
+  goal?: string | null
+  preparation: string[]
+  steps: string[]
+  completionCheck?: string | null
 }
 
 export interface RehabPlan {
@@ -129,9 +176,27 @@ export interface ReportSummary {
   type: string
   size: string
   status?: string
+  kind?: 'legacy_monitoring_summary'
 }
 
+export type LegacyMonitoringReportSummary = ReportSummary
+
 export type MedicalRecordProcessingStatus = 'queued' | 'processing' | 'succeeded' | 'failed'
+
+export interface MedicalRecordPipelineStage {
+  status: MedicalRecordProcessingStatus
+  startedAt?: string | null
+  completedAt?: string | null
+  detail?: string | null
+  error?: string | null
+}
+
+export interface MedicalRecordReportPipelineState {
+  template: MedicalRecordPipelineStage
+  llm: MedicalRecordPipelineStage
+  pdf: MedicalRecordPipelineStage
+  updatedAt?: string | null
+}
 
 export interface MedicalRecordArchiveSummary {
   id: string
@@ -170,6 +235,7 @@ export interface MedicalRecordFile {
 
 export interface MedicalRecordReportSummary {
   id: string
+  agentType?: string | null
   archiveId: string
   archiveTitle: string
   version: number
@@ -180,6 +246,10 @@ export interface MedicalRecordReportSummary {
   pdfReady: boolean
   pdfFileName?: string | null
   reportWindowLabel?: string | null
+  templateName?: string | null
+  templateVersion?: string | null
+  pipelineState?: MedicalRecordReportPipelineState | null
+  qualityWarnings: string[]
 }
 
 export interface MedicalRecordReportSection {
@@ -206,11 +276,15 @@ export interface MedicalRecordArchiveDetail extends MedicalRecordArchiveSummary 
 export interface MedicalRecordReportDetail extends MedicalRecordReportSummary {
   disclaimer: string
   archiveDescription?: string | null
+  reportMarkdown?: string | null
   sections: MedicalRecordReportSection[]
   sourceFiles: MedicalRecordFile[]
   history: MedicalRecordReportSummary[]
   inputSnapshot?: MedicalRecordInputSnapshot | null
 }
+
+export type HealthReportSummary = MedicalRecordReportSummary
+export type HealthReportDetail = MedicalRecordReportDetail
 
 export interface ConsentSettings {
   shareWithDoctor: boolean

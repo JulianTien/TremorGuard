@@ -3,7 +3,11 @@ import { useAuth } from '../../lib/auth-context'
 
 function resolvePageTitle(pathname: string) {
   if (pathname.startsWith('/records/reports/')) {
-    return '病历联合健康报告'
+    return '帕金森患者健康分析报告'
+  }
+
+  if (pathname.startsWith('/reports/')) {
+    return '帕金森患者健康分析报告'
   }
 
   if (pathname.startsWith('/records/')) {
@@ -31,7 +35,7 @@ function resolvePageTitle(pathname: string) {
   }
 
   if (pathname === '/reports') {
-    return '监测摘要报告'
+    return 'AI 健康报告'
   }
 
   if (pathname === '/profile') {

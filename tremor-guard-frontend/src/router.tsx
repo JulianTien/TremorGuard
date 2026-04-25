@@ -51,6 +51,7 @@ export const router = createBrowserRouter([
       { path: 'records/reports/:reportId', element: <MedicalRecordReportPage /> },
       { path: 'records/:archiveId', element: <MedicalRecordArchivePage /> },
       { path: 'reports', element: <ReportsPage /> },
+      { path: 'reports/:reportId', element: <MedicalRecordReportPage /> },
       { path: 'profile', element: <ProfilePage /> },
     ],
   },

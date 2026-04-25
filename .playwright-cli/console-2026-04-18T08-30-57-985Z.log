@@ -1,0 +1,11 @@
+[   15505ms] [ERROR] TypeError: Cannot read properties of undefined (reading 'total_detections')
+    at http://127.0.0.1:8002/assets/AIAssistantView-CO7WxWq3.js:1:20787
+    at r (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:14:2156)
+    at pm (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:14:13336)
+    at Proxy.<anonymous> (http://127.0.0.1:8002/assets/AppLayout-BgoxJ9ua.js:1:13644)
+    at qi (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:14:21079)
+    at fa.N [as fn] (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:14:30191)
+    at fa.run (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:10:1910)
+    at fa.runIfDirty (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:10:2220)
+    at nr (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:14:46)
+    at Ia (http://127.0.0.1:8002/assets/index-BVUKr1wr.js:14:1796) @ http://127.0.0.1:8002/assets/index-BVUKr1wr.js:13

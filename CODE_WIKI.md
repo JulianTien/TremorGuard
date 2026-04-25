@@ -4,6 +4,13 @@
 
 TremorGuard（震颤卫士）是一个针对震颤类疾病（如帕金森病）的智能监测与管理系统。该系统通过硬件采集、云端处理、AI分析和应用展示四个层级，为患者提供震颤数据监测、分析、管理和咨询服务。
 
+在阅读代码前，建议先区分两套架构视角：
+
+- 技术分层：硬件、云端、AI、应用
+- 业务分层：身份与接入、监测与证据、AI 协同、干预与输出
+
+技术分层帮助理解系统怎么搭建，业务分层帮助理解患者侧主业务怎么收口。如果你想先理解患者侧一期“接入、记录、AI 解读、计划与报告”的主链关系，先看 [docs/patient_business_architecture.md](/Users/peng/Documents/trae_projects/TremorGuard/docs/patient_business_architecture.md)。
+
 **主要功能**：
 - 实时震颤数据采集与分析
 - 用药管理与提醒
@@ -29,6 +36,7 @@ TremorGuard/
 ├── docs/                  # 项目文档
 │   ├── system_architecture.drawio  # 系统架构图
 │   ├── system_architecture.md      # 系统架构文档
+│   ├── patient_business_architecture.md # 患者侧一期业务架构稿
 │   ├── 震颤卫士PRD构建指南.md       # 产品需求文档
 │   └── 项目介绍.pdf              # 项目介绍
 ├── tremor-guard-backend/  # 后端服务

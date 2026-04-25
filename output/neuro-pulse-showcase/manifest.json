@@ -1,0 +1,39 @@
+{
+  "project_name": "Neuro Pulse",
+  "output_dir": "/Users/peng/Documents/trae_projects/TremorGuard/output/neuro-pulse-showcase",
+  "screenshots": [
+    {
+      "filename": "neuro-pulse-04-ai-chat-backend.png",
+      "type": "code",
+      "html": "/Users/peng/Documents/trae_projects/TremorGuard/output/neuro-pulse-showcase/html/neuro-pulse-04-ai-chat-backend.html",
+      "caption": "AI 问答后端：融合监测上下文并约束生成内容。"
+    },
+    {
+      "filename": "neuro-pulse-05-rehab-guidance-backend.png",
+      "type": "code",
+      "html": "/Users/peng/Documents/trae_projects/TremorGuard/output/neuro-pulse-showcase/html/neuro-pulse-05-rehab-guidance-backend.html",
+      "caption": "康复计划引擎：按证据窗口生成可确认的辅助训练方案。"
+    },
+    {
+      "filename": "neuro-pulse-06-dashboard-analytics-backend.png",
+      "type": "code",
+      "html": "/Users/peng/Documents/trae_projects/TremorGuard/output/neuro-pulse-showcase/html/neuro-pulse-06-dashboard-analytics-backend.html",
+      "caption": "数据洞察后端：生成指标摘要、趋势点和复诊提示。"
+    },
+    {
+      "filename": "neuro-pulse-01-home-hero.png",
+      "type": "frontend",
+      "caption": "首页封面：用一句话和核心指标说明产品价值。"
+    },
+    {
+      "filename": "neuro-pulse-02-feature-cards.png",
+      "type": "frontend",
+      "caption": "技术特性：硬件、频谱分析与 AI 能力一屏讲清。"
+    },
+    {
+      "filename": "neuro-pulse-03-severity-demo.png",
+      "type": "frontend",
+      "caption": "分级演示：通过交互模拟展示震颤严重度变化。"
+    }
+  ]
+}

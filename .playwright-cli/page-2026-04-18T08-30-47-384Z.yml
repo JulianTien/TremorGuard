@@ -1,0 +1,127 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "Neuro Pulse Detecting movement patterns. Enabling earlier support." [ref=e6] [cursor=pointer]:
+      - /url: /dashboard
+      - img [ref=e9]
+      - generic [ref=e12]:
+        - text: Neuro Pulse
+        - paragraph [ref=e13]: Detecting movement patterns. Enabling earlier support.
+    - navigation [ref=e15]:
+      - link "Dashboard" [ref=e16] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e18]
+        - generic [ref=e20]: Dashboard
+      - link "Live monitoring" [ref=e21] [cursor=pointer]:
+        - /url: /monitor
+        - img [ref=e23]
+        - generic [ref=e25]: Live monitoring
+      - link "History" [ref=e26] [cursor=pointer]:
+        - /url: /history
+        - img [ref=e28]
+        - generic [ref=e30]: History
+      - link "Analysis" [ref=e31] [cursor=pointer]:
+        - /url: /analysis
+        - img [ref=e33]
+        - generic [ref=e35]: Analysis
+      - link "AI assistant" [ref=e36] [cursor=pointer]:
+        - /url: /ai-assistant
+        - img [ref=e38]
+        - generic [ref=e40]: AI assistant
+      - link "Medication" [ref=e42] [cursor=pointer]:
+        - /url: /medication
+        - img [ref=e44]
+        - generic [ref=e46]: Medication
+      - link "Health profile" [ref=e47] [cursor=pointer]:
+        - /url: /health-profile
+        - img [ref=e49]
+        - generic [ref=e51]: Health profile
+      - link "Rehabilitation" [ref=e52] [cursor=pointer]:
+        - /url: /rehabilitation
+        - img [ref=e54]
+        - generic [ref=e56]: Rehabilitation
+      - link "Devices" [ref=e57] [cursor=pointer]:
+        - /url: /devices
+        - img [ref=e59]
+        - generic [ref=e61]: Devices
+      - link "Reports" [ref=e62] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e64]
+        - generic [ref=e66]: Reports
+      - link "Configuration" [ref=e67] [cursor=pointer]:
+        - /url: /config
+        - img [ref=e69]
+        - generic [ref=e71]: Configuration
+      - link "Settings" [ref=e72] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e74]
+        - generic [ref=e77]: Settings
+    - generic [ref=e80]:
+      - generic [ref=e84]: A
+      - generic [ref=e86]:
+        - paragraph [ref=e87]: alex.demo
+        - paragraph [ref=e88]: demo@neuropulse.ai
+      - button [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+  - generic [ref=e92]:
+    - banner [ref=e93]:
+      - generic [ref=e95]:
+        - paragraph [ref=e96]: Hello, alex.demo
+        - paragraph [ref=e97]: Wishing you a steady and confident day
+      - generic [ref=e98]:
+        - generic "Language" [ref=e99]:
+          - button "English" [ref=e100] [cursor=pointer]
+          - button "简体中文" [ref=e101] [cursor=pointer]
+        - button "Search" [ref=e102] [cursor=pointer]:
+          - img [ref=e103]
+        - button "3" [ref=e105] [cursor=pointer]:
+          - img [ref=e106]
+          - generic [ref=e108]: "3"
+        - link "Start monitoring" [ref=e109] [cursor=pointer]:
+          - /url: /monitor
+          - img [ref=e110]
+          - generic [ref=e112]: Start monitoring
+    - main [ref=e113]:
+      - generic [ref=e115]:
+        - img [ref=e117]
+        - generic [ref=e119]:
+          - heading "AI assistant" [level=1] [ref=e120]
+          - paragraph [ref=e121]: Ask questions, generate reports, and surface daily care insights.
+      - generic [ref=e123]:
+        - button "Chat" [ref=e124] [cursor=pointer]:
+          - generic [ref=e125]:
+            - img [ref=e126]
+            - text: Chat
+        - button "Daily insight" [ref=e128] [cursor=pointer]:
+          - generic [ref=e129]:
+            - img [ref=e130]
+            - text: Daily insight
+        - button "Doctor report" [ref=e132] [cursor=pointer]:
+          - generic [ref=e133]:
+            - img [ref=e134]
+            - text: Doctor report
+        - button "AI analysis" [ref=e136] [cursor=pointer]:
+          - generic [ref=e137]:
+            - img [ref=e138]
+            - text: AI analysis
+        - button "Insights" [ref=e140] [cursor=pointer]:
+          - generic [ref=e141]:
+            - img [ref=e142]
+            - text: Insights
+      - generic [ref=e144]:
+        - generic [ref=e145]:
+          - generic [ref=e147]:
+            - img [ref=e149]
+            - paragraph [ref=e152]: Hello, I am the Neuro Pulse assistant. I can summarize tremor trends, explain symptom patterns, and help draft clinician-ready notes.
+          - paragraph [ref=e156]: What stands out in my latest monitoring data?
+          - generic [ref=e158]:
+            - img [ref=e160]
+            - paragraph [ref=e163]: Your latest demo data shows a stable average severity of 1.9 with fewer high-severity episodes than the previous week. Morning sessions remain the strongest window for baseline monitoring.
+        - generic [ref=e165]:
+          - generic [ref=e166]:
+            - textbox "Ask about symptoms, trends, reports, or daily guidance…" [ref=e167]
+            - button [disabled] [ref=e168]:
+              - img [ref=e169]
+          - button "Clear chat" [ref=e171] [cursor=pointer]:
+            - img [ref=e172]
+    - contentinfo [ref=e174]:
+      - paragraph [ref=e175]: Neuro Pulse © 2024 · Built for continuous neurological care

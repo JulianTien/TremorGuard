@@ -1,0 +1,64 @@
+- generic [ref=e3]:
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - img [ref=e12]
+      - generic [ref=e14]:
+        - heading "震颤卫士" [level=1] [ref=e15]
+        - paragraph [ref=e16]: Tremor Guard
+    - heading "欢迎回来， 继续您的健康之旅" [level=2] [ref=e17]:
+      - text: 欢迎回来，
+      - text: 继续您的健康之旅
+    - paragraph [ref=e18]: 专业的帕金森震颤监测系统，用科技守护您的每一天
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - img [ref=e22]
+        - generic [ref=e24]: 实时震颤监测与分析
+      - generic [ref=e25]:
+        - img [ref=e27]
+        - generic [ref=e29]: AI 智能健康建议
+      - generic [ref=e30]:
+        - img [ref=e32]
+        - generic [ref=e34]: 专业医疗报告生成
+  - generic [ref=e36]:
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - heading "登录账户" [level=2] [ref=e39]
+        - paragraph [ref=e40]: 输入您的账户信息继续
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: 账户 (邮箱或用户名)
+          - generic [ref=e44]:
+            - img [ref=e45]
+            - textbox "账户 (邮箱或用户名)" [ref=e47]:
+              - /placeholder: 邮箱地址或用户名
+              - text: patient@tremorguard.local
+        - generic [ref=e48]:
+          - generic [ref=e49]: 密码
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - img [ref=e52]
+              - textbox "密码" [ref=e54]:
+                - /placeholder: 输入密码
+                - text: tg-demo-password
+            - button [ref=e55] [cursor=pointer]:
+              - img [ref=e56]
+        - generic [ref=e59]:
+          - generic [ref=e60] [cursor=pointer]:
+            - checkbox "记住我" [ref=e61]
+            - generic [ref=e62]: 记住我
+          - link "忘记密码?" [ref=e63] [cursor=pointer]:
+            - /url: "#"
+        - generic [ref=e76]:
+          - img [ref=e77]
+          - generic [ref=e79]: 邮箱或密码错误
+        - button "登录" [ref=e64] [cursor=pointer]:
+          - generic [ref=e80]: 登录
+      - generic [ref=e68]: 或
+      - paragraph [ref=e69]:
+        - text: 还没有账号?
+        - link "立即注册" [ref=e70] [cursor=pointer]:
+          - /url: /register
+    - link "返回首页" [ref=e72] [cursor=pointer]:
+      - /url: /
+      - img [ref=e73]
+      - generic [ref=e75]: 返回首页

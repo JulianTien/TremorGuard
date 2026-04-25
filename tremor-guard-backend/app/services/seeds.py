@@ -19,6 +19,7 @@ from app.models.clinical import (
     TremorEvent,
 )
 from app.models.identity import AuthCredential, User
+from app.services.rehab_guidance import to_plan_items
 
 settings = get_settings()
 
@@ -294,7 +295,7 @@ def seed_active_rehab_plan(session: Session, user_id: str) -> None:
             scenario="stable_support",
             title="基础维持训练方案",
             version=1,
-            rationale="当前激活方案用于维持日常康复节奏，训练内容来自预设模板。",
+            rationale="当前激活方案用于维持日常康复节奏，后续可根据目标日证据重新生成 AI 候选方案。",
             disclaimer=REHAB_DISCLAIMER,
             conflict_status="consistent",
             risk_flags=[],
@@ -316,6 +317,7 @@ def seed_active_rehab_plan(session: Session, user_id: str) -> None:
                         "duration_minutes": template.duration_minutes,
                         "frequency_label": template.frequency_label,
                         "cautions": template.cautions,
+                        **next(item for item in to_plan_items([template])),
                     }
                     for template in templates
                 ],

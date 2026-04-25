@@ -20,12 +20,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { key: 'overview', label: '总览仪表盘', path: '/overview', icon: Activity },
-  { key: 'ai-doctor', label: 'AI 医生', path: '/ai-doctor', icon: MessageSquare },
+  { key: 'overview', label: '监测总览', path: '/overview', icon: Activity },
   { key: 'medication', label: '用药记录', path: '/medication', icon: Pill },
-  { key: 'rehab-guidance', label: '康复训练计划', path: '/rehab-guidance', icon: Sparkles },
   { key: 'medical-records', label: '病历档案', path: '/records', icon: FolderOpenDot },
-  { key: 'reports', label: '监测摘要报告', path: '/reports', icon: FileText },
+  { key: 'ai-doctor', label: 'AI 医生', path: '/ai-doctor', icon: MessageSquare },
+  { key: 'rehab-guidance', label: '康复计划', path: '/rehab-guidance', icon: Sparkles },
+  { key: 'reports', label: 'AI 健康报告', path: '/reports', icon: FileText },
   { key: 'profile', label: '个人中心', path: '/profile', icon: User },
 ]
 

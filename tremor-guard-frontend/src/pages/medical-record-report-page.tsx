@@ -1,30 +1,58 @@
-import { Download, FileImage, LoaderCircle, RefreshCcw, ScrollText } from 'lucide-react'
+import { Download, FileImage, LoaderCircle, RefreshCcw, ScrollText, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { ProcessingStatusBadge } from '../components/medical-records/processing-status-badge'
+import { ReportPipelineStatus } from '../components/medical-records/report-pipeline-status'
+import { MarkdownRenderer } from '../components/ui/markdown-renderer'
 import { PageHeader } from '../components/ui/page-header'
 import { SectionPanel } from '../components/ui/section-panel'
 import { useApiResource } from '../hooks/use-api-resource'
-import { downloadMedicalRecordReportPdf, getMedicalRecordReport } from '../lib/api'
+import { downloadHealthReportPdf, downloadMedicalRecordReportPdf, getHealthReport, getMedicalRecordReport, getProfile } from '../lib/api'
 import { formatMedicalRecordDateTime, isMedicalRecordStatusActive } from '../lib/medical-records'
 import type { MedicalRecordReportDetail } from '../types/domain'
 
 function isPending(report: MedicalRecordReportDetail | null) {
-  return Boolean(report && isMedicalRecordStatusActive(report.status))
+  return Boolean(
+    report &&
+      (isMedicalRecordStatusActive(report.status) ||
+        report.pipelineState?.template.status === 'queued' ||
+        report.pipelineState?.template.status === 'processing' ||
+        report.pipelineState?.llm.status === 'queued' ||
+        report.pipelineState?.llm.status === 'processing' ||
+        report.pipelineState?.pdf.status === 'queued' ||
+        report.pipelineState?.pdf.status === 'processing'),
+  )
 }
 
 export function MedicalRecordReportPage() {
   const { reportId = '' } = useParams()
+  const location = useLocation()
+  const isHealthReportRoute = location.pathname.startsWith('/reports/')
   const {
     data: report,
     error,
     isLoading,
     reload,
-  } = useApiResource(() => getMedicalRecordReport(reportId), [reportId])
+  } = useApiResource(
+    () => (isHealthReportRoute ? getHealthReport(reportId) : getMedicalRecordReport(reportId)),
+    [reportId, isHealthReportRoute],
+  )
+  const { data: profile } = useApiResource(getProfile, [])
   const [actionError, setActionError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
 
   const shouldPoll = useMemo(() => isPending(report), [report])
+  const patientProfile = profile?.patientProfile ?? null
+  const medicationSection = useMemo(
+    () =>
+      report?.sections.find((section) => /用药|药效|关联|剂末|波动/i.test(section.title)) ?? null,
+    [report],
+  )
+  const monitoringSection = useMemo(
+    () =>
+      report?.sections.find((section) => /趋势|监测|分析|总结|概览|洞察/i.test(section.title)) ?? null,
+    [report],
+  )
 
   useEffect(() => {
     if (!shouldPoll) {
@@ -48,7 +76,13 @@ export function MedicalRecordReportPage() {
     try {
       setIsDownloading(true)
       setActionError(null)
-      await downloadMedicalRecordReportPdf(report.id, report.pdfFileName ?? undefined)
+      const downloadReport = isHealthReportRoute ? downloadHealthReportPdf : downloadMedicalRecordReportPdf
+      await downloadReport(report.id, {
+        preferredName: report.pdfFileName ?? undefined,
+        patientName: patientProfile?.name ?? null,
+        generatedAt: report.generatedAt ?? null,
+        version: report.version,
+      })
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'PDF 下载失败。'
       setActionError(message)
@@ -60,10 +94,14 @@ export function MedicalRecordReportPage() {
   async function handleHistoryDownload(reportToDownload: MedicalRecordReportDetail['history'][number]) {
     try {
       setActionError(null)
-      await downloadMedicalRecordReportPdf(
-        reportToDownload.id,
-        reportToDownload.pdfFileName ?? undefined,
-      )
+      const downloadReport =
+        reportToDownload.templateName ? downloadHealthReportPdf : downloadMedicalRecordReportPdf
+      await downloadReport(reportToDownload.id, {
+        preferredName: reportToDownload.pdfFileName ?? undefined,
+        patientName: patientProfile?.name ?? null,
+        generatedAt: reportToDownload.generatedAt ?? null,
+        version: reportToDownload.version,
+      })
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'PDF 下载失败。'
       setActionError(message)
@@ -82,6 +120,9 @@ export function MedicalRecordReportPage() {
     )
   }
 
+  const backLink = isHealthReportRoute ? '/reports' : `/records/${report.archiveId}`
+  const backLabel = isHealthReportRoute ? '返回 AI 健康报告' : '返回档案'
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -96,10 +137,10 @@ export function MedicalRecordReportPage() {
               </div>
             ) : null}
             <Link
-              to={`/records/${report.archiveId}`}
+              to={backLink}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-teal-200 hover:text-teal-700"
             >
-              返回档案
+              {backLabel}
             </Link>
             <button
               type="button"
@@ -116,7 +157,11 @@ export function MedicalRecordReportPage() {
 
       <SectionPanel
         title="报告元信息"
-        description="该报告属于 medical records 域，不会在 legacy `/reports` 监测摘要中心中展示。"
+        description={
+          isHealthReportRoute
+            ? '该报告属于 AI 健康报告主资源，用于复诊沟通与健康管理结果输出。'
+            : '该报告属于病历档案域，用于保留档案内的版本化健康报告。'
+        }
         action={
           <button
             type="button"
@@ -138,9 +183,19 @@ export function MedicalRecordReportPage() {
               <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
                 {report.reportWindowLabel ?? '报告窗口待后端返回'}
               </span>
+              {report.templateVersion ? (
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                  模板 {report.templateVersion}
+                </span>
+              ) : null}
+              {report.agentType ? (
+                <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-700">
+                  {report.agentType === 'health_report_agent' ? '报告生成 Agent' : report.agentType}
+                </span>
+              ) : null}
             </div>
             {report.summary ? (
-              <p className="mt-4 text-sm leading-6 text-slate-600">{report.summary}</p>
+              <MarkdownRenderer content={report.summary} tone="muted" className="mt-4 max-w-none" />
             ) : (
               <p className="mt-4 text-sm text-slate-500">报告摘要将在生成完成后显示。</p>
             )}
@@ -162,27 +217,132 @@ export function MedicalRecordReportPage() {
         </div>
       </SectionPanel>
 
-      <SectionPanel title="报告正文" description="结构化报告 JSON 是真实来源，页面与 PDF 只负责渲染与导出。">
-        {report.sections.length === 0 ? (
+      <SectionPanel
+        title="生成状态"
+        description="显示模板注入、AI Markdown 生成与 PDF 转换的最新状态。"
+      >
+        <ReportPipelineStatus pipelineState={report.pipelineState} />
+      </SectionPanel>
+
+      {report.qualityWarnings.length > 0 ? (
+        <SectionPanel
+          title="质量提醒"
+          description="这些提醒不会阻止在线查看或 PDF 下载，但表示某些章节仍可进一步增强。"
+        >
+          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            {report.qualityWarnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </div>
+        </SectionPanel>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <SectionPanel
+          title="患者信息"
+          description="优先读取患者档案；未返回的字段明确显示为待补充。"
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">患者姓名</p>
+              <p className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-900">
+                <UserRound className="h-4 w-4 text-teal-600" />
+                {patientProfile?.name ?? '待患者档案补充'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">年龄 / 性别</p>
+              <p className="mt-2 text-sm text-slate-700">
+                {patientProfile ? `${patientProfile.age}岁 / ${patientProfile.gender}` : '待患者档案补充'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">临床背景</p>
+              <p className="mt-2 text-sm text-slate-700">
+                {patientProfile?.diagnosis ?? '待患者档案补充'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">主治机构</p>
+              <p className="mt-2 text-sm text-slate-700">
+                {patientProfile?.hospital ?? '待患者档案补充'}
+              </p>
+            </div>
+          </div>
+        </SectionPanel>
+
+        <SectionPanel
+          title="核心结论"
+          description="首页摘要面向复诊场景，保留后端原始结构化文本，不补写未返回的医学结论。"
+        >
+          {report.summary ? (
+            <MarkdownRenderer content={report.summary} className="max-w-none" />
+          ) : (
+            <p className="text-sm text-slate-500">报告核心结论待后端生成完成后返回。</p>
+          )}
+        </SectionPanel>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.95fr)]">
+        <SectionPanel
+          title="监测趋势摘要"
+          description="优先展示报告中与监测概览、趋势或洞察最相关的章节。"
+        >
+          {monitoringSection ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <h3 className="text-base font-semibold text-slate-900">{monitoringSection.title}</h3>
+              <MarkdownRenderer content={monitoringSection.body} tone="muted" className="mt-3 max-w-none" />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">当前报告未单独返回监测趋势摘要章节。</p>
+          )}
+        </SectionPanel>
+
+        <SectionPanel
+          title="用药-症状关联"
+          description="仅展示报告中已返回的用药、药效或波动关联内容，不推断额外治疗建议。"
+        >
+          {medicationSection ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <h3 className="text-base font-semibold text-slate-900">{medicationSection.title}</h3>
+              <MarkdownRenderer content={medicationSection.body} tone="muted" className="mt-3 max-w-none" />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">当前报告未单独返回用药-症状关联章节。</p>
+          )}
+        </SectionPanel>
+      </div>
+
+      <SectionPanel
+        title="在线文档"
+        description="在线页直接展示 Markdown 报告正文；PDF 由同一份 Markdown 文档转换而来。"
+      >
+        {report.reportMarkdown ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <MarkdownRenderer content={report.reportMarkdown} className="max-w-none" />
+          </div>
+        ) : report.sections.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
             <p className="text-sm font-medium text-slate-700">报告内容尚未准备完成</p>
-            <p className="mt-2 text-sm text-slate-500">当状态进入“已完成”后，结构化报告章节会显示在这里。</p>
+            <p className="mt-2 text-sm text-slate-500">Markdown 文档生成完成后会直接显示在这里。</p>
           </div>
-        ) : null}
-
-        <div className="space-y-4">
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="space-y-6">
           {report.sections.map((section) => (
-            <article key={section.id} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <article key={section.id} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-center gap-3">
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-teal-600">
                   <ScrollText className="h-5 w-5" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900">{section.title}</h3>
               </div>
-              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-600">{section.body}</p>
-            </article>
+              <MarkdownRenderer content={section.body} tone="muted" className="mt-4 max-w-none" />
+              </article>
           ))}
-        </div>
+            </div>
+          </div>
+        )}
       </SectionPanel>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">

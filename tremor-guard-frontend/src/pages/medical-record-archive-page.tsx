@@ -105,7 +105,9 @@ export function MedicalRecordArchivePage() {
     try {
       setDownloadingReportId(reportId)
       setActionError(null)
-      await downloadMedicalRecordReportPdf(reportId, pdfFileName ?? undefined)
+      await downloadMedicalRecordReportPdf(reportId, {
+        preferredName: pdfFileName ?? undefined,
+      })
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'PDF 下载失败。'
       setActionError(message)

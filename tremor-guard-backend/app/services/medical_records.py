@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
@@ -9,6 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from statistics import mean
 from types import SimpleNamespace
+from urllib.parse import quote
 from uuid import uuid4
 
 import httpx
@@ -40,17 +42,48 @@ from app.schemas.domain import (
     MedicalRecordExtractionDTO,
     MedicalRecordFileDTO,
     MedicalRecordReportDetailDTO,
+    MedicalRecordReportPipelineStageDTO,
+    MedicalRecordReportPipelineStateDTO,
     MedicalRecordReportSummaryDTO,
 )
 from app.services.audit import record_audit_log
 from app.services.dashboard import format_device_status, get_latest_device_status
+from app.services.markdown_pdf import BuiltinMarkdownPdfRenderer
+from app.services.report_agent import HealthReportAgent, ReportContextAssembler
 
 DISCLAIMER_TEXT = "本报告仅供健康管理与复诊沟通参考，不能替代医生诊断、分期、处方或药量调整。"
 DISCLAIMER_VERSION = "non-diagnostic-v1"
 PROMPT_VERSION = "medical-records-v1"
+AI_HEALTH_ARCHIVE_TITLE = "AI健康报告档案"
+AI_HEALTH_REPORT_TITLE = "AI健康报告"
+HEALTH_REPORT_TEMPLATE_NAME = "Parkinson-health-analysis-report"
+HEALTH_REPORT_TEMPLATE_VERSION = "v1"
+HEALTH_REPORT_TEMPLATE_TITLE = "帕金森患者健康分析报告"
+HEALTH_REPORT_TEMPLATE_SECTIONS = [
+    "基本信息",
+    "评估目的",
+    "主诉与现病史",
+    "既往史、家族史及生活方式",
+    "当前治疗与用药情况",
+    "运动症状评估",
+    "非运动症状评估",
+    "日常生活能力评估",
+    "体格检查",
+    "辅助检查结果",
+    "量表评分与疾病分期",
+    "主要健康问题总结",
+    "综合分析",
+    "干预建议",
+    "随访计划",
+    "结论",
+]
+MISSING_DATA_PLACEHOLDER = "数据不足/待补充。"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 BANNED_PHRASES = ("确诊", "诊断为", "分期", "处方", "药量调整", "排除")
+MARKDOWN_PDF_RENDERER = BuiltinMarkdownPdfRenderer(DISCLAIMER_TEXT)
+REPORT_CONTEXT_ASSEMBLER = ReportContextAssembler()
+HEALTH_REPORT_AGENT = HealthReportAgent()
 
 
 @dataclass(slots=True)
@@ -72,16 +105,376 @@ def _storage_root() -> Path:
     return root
 
 
+def _build_pdf_bytes(title: str, sections: list[tuple[str, list[str]]]) -> bytes:
+    markdown_parts = [f"# {title}"]
+    for section_title, items in sections:
+        markdown_parts.append(f"## {section_title}")
+        normalized_items = [str(item).strip() for item in items if str(item).strip()]
+        if not normalized_items:
+            markdown_parts.append(MISSING_DATA_PLACEHOLDER)
+            continue
+        for item in normalized_items:
+            markdown_parts.append(f"- {item}")
+    markdown = "\n\n".join(markdown_parts)
+    return MARKDOWN_PDF_RENDERER.render(title, markdown)
+
+
 def _archive_path(archive_id: str) -> Path:
     path = _storage_root() / archive_id
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
+def _sanitize_download_filename_segment(value: str | None) -> str:
+    if not value:
+        return ""
+    sanitized = "".join(" " if char in '<>:"/\\|?*' or ord(char) < 32 else char for char in value)
+    return " ".join(sanitized.split())
+
+
+def _ascii_filename_fallback(value: str) -> str:
+    ascii_only = "".join(char if ord(char) < 128 else "-" for char in value)
+    ascii_only = "".join(char for char in ascii_only if char.isalnum() or char in ("-", "_", ".", " "))
+    normalized = "-".join(part for part in ascii_only.replace(" ", "-").split("-") if part)
+    return normalized or "tremorguard-health-report.pdf"
+
+
+def _report_download_filename(report: LongitudinalReport) -> str:
+    patient_name = None
+    if isinstance(report.input_snapshot, dict):
+        patient_profile = report.input_snapshot.get("patient_profile")
+        if isinstance(patient_profile, dict):
+            patient_name = str(patient_profile.get("name") or "").strip() or None
+
+    parts = [
+        "TremorGuard",
+        _sanitize_download_filename_segment(patient_name),
+        "health-report",
+        report.report_window_end.strftime("%Y%m%d"),
+        f"v{report.version}",
+    ]
+    file_name = "-".join(part for part in parts if part)
+    return f"{file_name or report.id}.pdf"
+
+
+def _content_disposition_headers(filename: str) -> dict[str, str]:
+    safe_filename = _sanitize_download_filename_segment(filename) or "tremorguard-health-report.pdf"
+    ascii_fallback = _ascii_filename_fallback(safe_filename)
+    encoded_filename = quote(safe_filename, safe="")
+    return {
+        "Content-Disposition": (
+            f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded_filename}"
+        )
+    }
+
+
 def _reports_path(archive_id: str) -> Path:
     path = _archive_path(archive_id) / "reports"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _to_iso(dt: datetime | None) -> str | None:
+    return dt.isoformat() if dt else None
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _build_pipeline_stage(
+    status: str = "queued",
+    *,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    detail: str | None = None,
+    error: str | None = None,
+) -> dict[str, str | None]:
+    return {
+        "status": status,
+        "started_at": _to_iso(started_at),
+        "completed_at": _to_iso(completed_at),
+        "detail": detail,
+        "error": error,
+    }
+
+
+def _initial_pipeline_state() -> dict[str, object]:
+    now = _utcnow()
+    return {
+        "router": _build_pipeline_stage("queued"),
+        "context_assembly": _build_pipeline_stage("queued"),
+        "report_agent_llm": _build_pipeline_stage("queued"),
+        "markdown_validation": _build_pipeline_stage("queued"),
+        "pdf_render": _build_pipeline_stage("queued"),
+        "template": _build_pipeline_stage("queued"),
+        "llm": _build_pipeline_stage("queued"),
+        "pdf": _build_pipeline_stage("queued"),
+        "updated_at": _to_iso(now),
+    }
+
+
+def _get_pipeline_state(report: LongitudinalReport) -> dict[str, object]:
+    if isinstance(report.pipeline_state, dict):
+        state = dict(report.pipeline_state)
+    else:
+        state = {}
+    state.setdefault(
+        "template",
+        _build_pipeline_stage(
+            "succeeded" if report.input_snapshot else "queued",
+            completed_at=report.completed_at if report.input_snapshot else None,
+            detail="已完成模板上下文准备。" if report.input_snapshot else None,
+        ),
+    )
+    state.setdefault(
+        "llm",
+        _build_pipeline_stage(
+            report.status if report.status in {"queued", "processing", "succeeded", "failed"} else "queued",
+            completed_at=report.completed_at if report.status == "succeeded" else None,
+            error=report.error_summary if report.status == "failed" else None,
+        ),
+    )
+    state.setdefault(
+        "pdf",
+        _build_pipeline_stage(
+            report.pdf_status if report.pdf_status in {"queued", "processing", "succeeded", "failed"} else "queued",
+            completed_at=report.completed_at if report.pdf_status == "succeeded" else None,
+        ),
+    )
+    state.setdefault("updated_at", _to_iso(report.updated_at))
+    return state
+
+
+def _set_pipeline_stage(
+    report: LongitudinalReport,
+    stage_name: str,
+    status: str,
+    *,
+    detail: str | None = None,
+    error: str | None = None,
+) -> None:
+    state = _get_pipeline_state(report)
+    stage = dict(state.get(stage_name) or _build_pipeline_stage())
+    now = _utcnow()
+    if status == "processing" and not stage.get("started_at"):
+        stage["started_at"] = _to_iso(now)
+    if status in {"succeeded", "failed"}:
+        stage["started_at"] = stage.get("started_at") or _to_iso(now)
+        stage["completed_at"] = _to_iso(now)
+    stage["status"] = status
+    if detail is not None:
+        stage["detail"] = detail
+    if error is not None:
+        stage["error"] = error
+    elif status != "failed":
+        stage["error"] = None
+    state[stage_name] = stage
+    state["updated_at"] = _to_iso(now)
+    report.pipeline_state = state
+
+
+def _pipeline_state_dto(report: LongitudinalReport) -> MedicalRecordReportPipelineStateDTO:
+    state = _get_pipeline_state(report)
+
+    def build_stage(name: str) -> MedicalRecordReportPipelineStageDTO:
+        stage = state.get(name) if isinstance(state.get(name), dict) else {}
+        return MedicalRecordReportPipelineStageDTO(
+            status=str(stage.get("status") or "queued"),
+            started_at=_parse_iso_datetime(stage.get("started_at")),
+            completed_at=_parse_iso_datetime(stage.get("completed_at")),
+            detail=str(stage.get("detail")) if stage.get("detail") is not None else None,
+            error=str(stage.get("error")) if stage.get("error") is not None else None,
+        )
+
+    return MedicalRecordReportPipelineStateDTO(
+        router=build_stage("router"),
+        context_assembly=build_stage("context_assembly"),
+        report_agent_llm=build_stage("report_agent_llm"),
+        markdown_validation=build_stage("markdown_validation"),
+        pdf_render=build_stage("pdf_render"),
+        template=build_stage("template"),
+        llm=build_stage("llm"),
+        pdf=build_stage("pdf"),
+        updated_at=_parse_iso_datetime(state.get("updated_at") if isinstance(state.get("updated_at"), str) else None),
+    )
+
+
+def _normalize_heading_key(text: str) -> str:
+    normalized = text.strip().lstrip("#").strip()
+    normalized = re.sub(r"^\d+[\.\u3001、\s]+", "", normalized)
+    normalized = re.sub(r"\s+", "", normalized)
+    return normalized
+
+
+def _strip_markdown_text(text: str) -> str:
+    normalized = re.sub(r"`([^`]*)`", r"\1", text)
+    normalized = normalized.replace("**", "").replace("__", "").replace("*", "").replace("_", "")
+    normalized = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", normalized)
+    normalized = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", normalized)
+    normalized = normalized.lstrip("#").strip()
+    return normalized
+
+
+def _markdown_lines_to_items(text: str) -> list[str]:
+    items: list[str] = []
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        stripped = _strip_markdown_text(stripped)
+        stripped = re.sub(r"^[\-\*\u2022]\s*", "", stripped)
+        stripped = re.sub(r"^\d+[\.\)]\s*", "", stripped)
+        if stripped:
+            items.append(stripped)
+    return items
+
+
+def _parse_report_markdown_sections(markdown: str) -> list[dict[str, str]]:
+    title_map = {_normalize_heading_key(title): title for title in HEALTH_REPORT_TEMPLATE_SECTIONS}
+    section_bodies: dict[str, list[str]] = {title: [] for title in HEALTH_REPORT_TEMPLATE_SECTIONS}
+    current_title: str | None = None
+
+    for raw_line in markdown.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            if current_title:
+                section_bodies[current_title].append("")
+            continue
+
+        normalized = _normalize_heading_key(stripped)
+        matched_title = title_map.get(normalized)
+        if matched_title and (stripped.startswith("#") or re.match(r"^\d+[\.\u3001、\s]+", stripped)):
+            current_title = matched_title
+            continue
+        if stripped.startswith("#") and normalized == _normalize_heading_key(HEALTH_REPORT_TEMPLATE_TITLE):
+            continue
+        if current_title:
+            section_bodies[current_title].append(raw_line.rstrip())
+
+    sections: list[dict[str, str]] = []
+    for index, title in enumerate(HEALTH_REPORT_TEMPLATE_SECTIONS, start=1):
+        body = "\n".join(section_bodies[title]).strip()
+        sections.append(
+            {
+                "id": f"template-section-{index}",
+                "title": f"{index}. {title}",
+                "body": body or MISSING_DATA_PLACEHOLDER,
+            }
+        )
+    return sections
+
+
+def _build_canonical_report_markdown(sections: Sequence[dict[str, str]]) -> str:
+    lines = [f"# {HEALTH_REPORT_TEMPLATE_TITLE}", ""]
+    for section in sections:
+        lines.append(f"## {section['title']}")
+        lines.append(section["body"].strip() or MISSING_DATA_PLACEHOLDER)
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _build_summary_from_sections(sections: Sequence[dict[str, str]]) -> str:
+    important_titles = {"12. 主要健康问题总结", "16. 结论"}
+    blocks: list[str] = []
+    for section in sections:
+        if section["title"] in important_titles:
+            body_lines = _markdown_lines_to_items(section["body"])
+            body = "；".join(body_lines[:3]) if body_lines else MISSING_DATA_PLACEHOLDER
+            blocks.append(f"**{section['title']}**\n{body}")
+    return "\n\n".join(blocks) if blocks else MISSING_DATA_PLACEHOLDER
+
+
+def _build_quality_warnings(sections: Sequence[dict[str, str]]) -> list[str]:
+    warnings: list[str] = []
+    for section in sections:
+        body = section["body"].strip()
+        if not body:
+            warnings.append(f"{section['title']} 未生成有效内容。")
+            continue
+        sentence_count = len(
+            [
+                item
+                for item in re.split(r"[。！？!?]", _strip_markdown_text(body))
+                if item.strip()
+            ]
+        )
+        if sentence_count < 2:
+            warnings.append(f"{section['title']} 分析性内容偏少，建议后续补充。")
+    return warnings
+
+
+def _build_report_payload_from_sections(
+    sections: Sequence[dict[str, str]],
+    context: dict,
+) -> dict[str, object]:
+    section_map = {section["title"]: section["body"] for section in sections}
+    information_gaps = [
+        item
+        for item in context.get("information_gaps") or []
+        if isinstance(item, str) and item.strip()
+    ]
+    if not information_gaps:
+        information_gaps = [
+            section["title"]
+            for section in sections
+            if MISSING_DATA_PLACEHOLDER in section["body"]
+        ]
+
+    return {
+        "title": HEALTH_REPORT_TEMPLATE_TITLE,
+        "executive_summary": _strip_markdown_text(
+            section_map.get("12. 主要健康问题总结") or section_map.get("16. 结论") or MISSING_DATA_PLACEHOLDER
+        ),
+        "historical_record_summary": _markdown_lines_to_items(
+            section_map.get("4. 既往史、家族史及生活方式", "")
+        ) or [MISSING_DATA_PLACEHOLDER],
+        "monitoring_observations": (
+            _markdown_lines_to_items(section_map.get("6. 运动症状评估", ""))
+            + _markdown_lines_to_items(section_map.get("7. 非运动症状评估", ""))
+            + _markdown_lines_to_items(section_map.get("8. 日常生活能力评估", ""))
+        ) or [MISSING_DATA_PLACEHOLDER],
+        "medication_observations": _markdown_lines_to_items(
+            section_map.get("5. 当前治疗与用药情况", "")
+        ) or [MISSING_DATA_PLACEHOLDER],
+        "information_gaps": information_gaps or [MISSING_DATA_PLACEHOLDER],
+        "doctor_discussion_points": (
+            _markdown_lines_to_items(section_map.get("14. 干预建议", ""))
+            + _markdown_lines_to_items(section_map.get("15. 随访计划", ""))
+        ) or [MISSING_DATA_PLACEHOLDER],
+        "non_diagnostic_notice": DISCLAIMER_TEXT,
+    }
+
+
+def _render_report_markdown_from_payload(report_payload: dict | None) -> str | None:
+    if not isinstance(report_payload, dict):
+        return None
+    legacy_sections = [
+        ("1. 基本信息", MISSING_DATA_PLACEHOLDER),
+        ("2. 评估目的", "用于辅助健康管理与复诊沟通，不替代医生诊断。"),
+        ("3. 主诉与现病史", MISSING_DATA_PLACEHOLDER),
+        ("4. 既往史、家族史及生活方式", "\n".join(str(item) for item in report_payload.get("historical_record_summary", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
+        ("5. 当前治疗与用药情况", "\n".join(str(item) for item in report_payload.get("medication_observations", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
+        ("6. 运动症状评估", "\n".join(str(item) for item in report_payload.get("monitoring_observations", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
+        ("7. 非运动症状评估", MISSING_DATA_PLACEHOLDER),
+        ("8. 日常生活能力评估", MISSING_DATA_PLACEHOLDER),
+        ("9. 体格检查", MISSING_DATA_PLACEHOLDER),
+        ("10. 辅助检查结果", MISSING_DATA_PLACEHOLDER),
+        ("11. 量表评分与疾病分期", MISSING_DATA_PLACEHOLDER),
+        ("12. 主要健康问题总结", str(report_payload.get("executive_summary") or MISSING_DATA_PLACEHOLDER)),
+        ("13. 综合分析", MISSING_DATA_PLACEHOLDER),
+        ("14. 干预建议", "\n".join(str(item) for item in report_payload.get("doctor_discussion_points", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
+        ("15. 随访计划", MISSING_DATA_PLACEHOLDER),
+        ("16. 结论", str(report_payload.get("executive_summary") or MISSING_DATA_PLACEHOLDER)),
+    ]
+    return _build_canonical_report_markdown(
+        [{"id": f"legacy-{index}", "title": title, "body": body} for index, (title, body) in enumerate(legacy_sections, start=1)]
+    )
 
 
 def _validate_upload(file: UploadFile, content: bytes) -> None:
@@ -122,6 +515,13 @@ def _ensure_report_owner(session: Session, user: User, report_id: str) -> Longit
     )
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
+    return report
+
+
+def _ensure_ai_health_report_owner(session: Session, user: User, report_id: str) -> LongitudinalReport:
+    report = _ensure_report_owner(session, user, report_id)
+    if report.title not in {AI_HEALTH_REPORT_TITLE, HEALTH_REPORT_TEMPLATE_TITLE} and report.template_name != HEALTH_REPORT_TEMPLATE_NAME:
+        raise HTTPException(status_code=404, detail="AI 健康报告不存在。")
     return report
 
 
@@ -244,8 +644,11 @@ def _to_report_summary(
     report: LongitudinalReport,
     archive_title: str | None = None,
 ) -> MedicalRecordReportSummaryDTO:
+    pipeline_state = _pipeline_state_dto(report)
+    sections = _report_sections(report)
     return MedicalRecordReportSummaryDTO(
         id=report.id,
+        agent_type="health_report_agent" if report.template_name == HEALTH_REPORT_TEMPLATE_NAME else "medical_record_report_agent",
         archive_id=report.archive_id,
         archive_title=archive_title,
         version=report.version,
@@ -261,33 +664,22 @@ def _to_report_summary(
         if isinstance(report.report_payload, dict)
         else None,
         pdf_ready=bool(report.pdf_path and report.pdf_status == "succeeded"),
-        pdf_file_name=f"{report.id}.pdf" if report.pdf_path and report.pdf_status == "succeeded" else None,
+        pdf_file_name=_report_download_filename(report)
+        if report.pdf_path and report.pdf_status == "succeeded"
+        else None,
         report_window_label=f"{report.report_window_start.isoformat()} 至 {report.report_window_end.isoformat()}",
+        template_name=report.template_name or HEALTH_REPORT_TEMPLATE_NAME,
+        template_version=report.template_version or HEALTH_REPORT_TEMPLATE_VERSION,
+        pipeline_state=pipeline_state,
+        quality_warnings=_build_quality_warnings(sections),
     )
 
 
-def _report_sections(report_payload: dict | None) -> list[dict[str, str]]:
-    if not isinstance(report_payload, dict):
-        return []
-
-    section_map = [
-        ("executive_summary", "执行摘要"),
-        ("historical_record_summary", "历史病例整理"),
-        ("monitoring_observations", "监测观察"),
-        ("medication_observations", "用药与波动观察"),
-        ("information_gaps", "信息缺口"),
-        ("doctor_discussion_points", "复诊沟通重点"),
-    ]
-    sections: list[dict[str, str]] = []
-    for key, title in section_map:
-        value = report_payload.get(key)
-        if isinstance(value, str) and value.strip():
-            sections.append({"id": key, "title": title, "body": value.strip()})
-        elif isinstance(value, list):
-            body = "\n".join(f"- {item}" for item in value if str(item).strip())
-            if body.strip():
-                sections.append({"id": key, "title": title, "body": body})
-    return sections
+def _report_sections(report: LongitudinalReport) -> list[dict[str, str]]:
+    markdown = report.report_markdown or _render_report_markdown_from_payload(report.report_payload)
+    if markdown:
+        return _parse_report_markdown_sections(markdown)
+    return []
 
 
 def _to_report_detail(
@@ -318,6 +710,8 @@ def _to_report_detail(
             .order_by(desc(LongitudinalReport.version), desc(LongitudinalReport.created_at))
         )
     )
+    report_markdown = report.report_markdown or _render_report_markdown_from_payload(report.report_payload)
+    sections = _report_sections(report)
     return MedicalRecordReportDetailDTO(
         **_to_report_summary(report, archive.title).model_dump(),
         archive_description=archive.description,
@@ -333,9 +727,10 @@ def _to_report_detail(
         medication_window_end=report.medication_window_end,
         input_snapshot=report.input_snapshot,
         report_payload=report.report_payload,
+        report_markdown=report_markdown,
         narrative_text=report.narrative_text,
         has_pdf=bool(report.pdf_path and report.pdf_status == "succeeded"),
-        sections=_report_sections(report.report_payload),
+        sections=sections,
         source_files=source_files,
         history=[_to_report_summary(item, archive.title) for item in history],
     )
@@ -462,8 +857,38 @@ def list_archive_reports(
     return [_to_report_summary(row, archive.title) for row in rows]
 
 
+def list_ai_health_reports(session: Session, user: User) -> list[MedicalRecordReportSummaryDTO]:
+    rows = list(
+        session.scalars(
+            select(LongitudinalReport)
+            .where(
+                LongitudinalReport.user_id == user.id,
+                LongitudinalReport.title.in_([AI_HEALTH_REPORT_TITLE, HEALTH_REPORT_TEMPLATE_TITLE]),
+            )
+            .order_by(desc(LongitudinalReport.completed_at), desc(LongitudinalReport.created_at))
+        )
+    )
+    archive_titles = {
+        archive.id: archive.title
+        for archive in session.scalars(
+            select(MedicalRecordArchive).where(MedicalRecordArchive.user_id == user.id)
+        )
+    }
+    return [_to_report_summary(row, archive_titles.get(row.archive_id)) for row in rows]
+
+
 def get_report_detail(session: Session, user: User, report_id: str) -> MedicalRecordReportDetailDTO:
     report = _ensure_report_owner(session, user, report_id)
+    archive = _ensure_archive_owner(session, user, report.archive_id)
+    return _to_report_detail(session, report, archive)
+
+
+def get_ai_health_report_detail(
+    session: Session,
+    user: User,
+    report_id: str,
+) -> MedicalRecordReportDetailDTO:
+    report = _ensure_ai_health_report_owner(session, user, report_id)
     archive = _ensure_archive_owner(session, user, report.archive_id)
     return _to_report_detail(session, report, archive)
 
@@ -728,6 +1153,98 @@ def _build_longitudinal_context(
     }
 
 
+def _build_template_outline_text() -> str:
+    return "\n".join(
+        f"{index}. {title}" for index, title in enumerate(HEALTH_REPORT_TEMPLATE_SECTIONS, start=1)
+    )
+
+
+def _build_lightweight_report_markdown(context: dict) -> str:
+    monitoring = context.get("monitoring_summary") or {}
+    medication = context.get("medication_summary") or {}
+    patient = context.get("patient_profile") or {}
+    document_summaries = context.get("document_summaries") or []
+    information_gaps = list(context.get("information_gaps") or [])
+
+    event_count = int(monitoring.get("event_count") or 0)
+    avg_amplitude = monitoring.get("avg_amplitude") or 0
+    max_amplitude = monitoring.get("max_amplitude") or 0
+    medication_count = int(medication.get("count") or 0)
+    patient_name = patient.get("name") or "当前用户"
+
+    if not document_summaries:
+        information_gaps.insert(0, "本次报告未纳入历史病历资料，仅基于监测与用药记录生成。")
+
+    section_bodies = {
+        "基本信息": (
+            f"- 姓名：{patient_name}\n"
+            f"- 年龄：{patient.get('age') or MISSING_DATA_PLACEHOLDER}\n"
+            f"- 性别：{patient.get('gender') or MISSING_DATA_PLACEHOLDER}\n"
+            f"- 当前诊断背景：{patient.get('diagnosis') or MISSING_DATA_PLACEHOLDER}"
+        ),
+        "评估目的": "用于辅助健康管理与复诊沟通，整理 TremorGuard 监测、用药与既往病历信息，不替代医生诊断。",
+        "主诉与现病史": (
+            f"近期监测窗口内累计记录 {event_count} 次震颤事件，平均幅度 {avg_amplitude}，峰值 {max_amplitude}。"
+        ),
+        "既往史、家族史及生活方式": (
+            "\n".join(
+                f"- {item.get('summary_text') or MISSING_DATA_PLACEHOLDER}" for item in document_summaries[:3]
+            )
+            if document_summaries
+            else MISSING_DATA_PLACEHOLDER
+        ),
+        "当前治疗与用药情况": (
+            f"- 用药窗口内共记录 {medication_count} 条用药记录。\n"
+            + (
+                "\n".join(
+                    f"- {entry.get('taken_at', '')} {entry.get('name', '')} {entry.get('dose', '')}（{entry.get('status', '')}）"
+                    for entry in medication.get("entries", [])[:6]
+                )
+                if medication.get("entries")
+                else f"- {MISSING_DATA_PLACEHOLDER}"
+            )
+        ),
+        "运动症状评估": (
+            f"- 监测窗口内累计记录 {event_count} 次震颤事件。\n"
+            f"- 平均幅度：{avg_amplitude}。\n"
+            f"- 峰值幅度：{max_amplitude}。"
+        ),
+        "非运动症状评估": MISSING_DATA_PLACEHOLDER,
+        "日常生活能力评估": MISSING_DATA_PLACEHOLDER,
+        "体格检查": MISSING_DATA_PLACEHOLDER,
+        "辅助检查结果": (
+            "\n".join(
+                f"- {item.get('document_type') or '病例摘要'}：{item.get('summary_text') or MISSING_DATA_PLACEHOLDER}"
+                for item in document_summaries[:3]
+            )
+            if document_summaries
+            else MISSING_DATA_PLACEHOLDER
+        ),
+        "量表评分与疾病分期": "当前未采集标准化量表评分，且本系统不提供疾病分期结论。",
+        "主要健康问题总结": (
+            f"{patient_name} 当前报告显示近期症状波动主要依据 TremorGuard 监测与用药记录整理，"
+            "适合在复诊时围绕症状波动、服药后变化与补充检查资料进行沟通。"
+        ),
+        "综合分析": (
+            "监测数据提示近期存在症状波动记录，但仍需结合医生面诊、体格检查和既往检查结果综合判断。"
+        ),
+        "干预建议": (
+            "- 建议继续记录症状波动与服药时间关系。\n"
+            "- 建议复诊前整理既往检查原文与近期不适变化。"
+        ),
+        "随访计划": "- 建议下次复诊时携带本报告与相关病历资料，由专业医生综合评估。",
+        "结论": "本报告用于辅助健康管理与复诊沟通，不替代医生诊断、分期或治疗决策。",
+    }
+    if information_gaps:
+        section_bodies["辅助检查结果"] += "\n\n待补充信息：\n" + "\n".join(f"- {item}" for item in information_gaps)
+
+    sections = [
+        {"id": f"template-section-{index}", "title": f"{index}. {title}", "body": section_bodies.get(title, MISSING_DATA_PLACEHOLDER)}
+        for index, title in enumerate(HEALTH_REPORT_TEMPLATE_SECTIONS, start=1)
+    ]
+    return _build_canonical_report_markdown(sections)
+
+
 def _assert_non_diagnostic(text: str) -> None:
     for phrase in BANNED_PHRASES:
         if phrase in text:
@@ -737,30 +1254,38 @@ def _assert_non_diagnostic(text: str) -> None:
             )
 
 
-def _normalize_report_payload(payload: dict, context: dict) -> dict:
-    result = {
-        "title": str(payload.get("title") or "病历联合健康报告"),
-        "executive_summary": str(payload.get("executive_summary") or "暂无摘要。"),
-        "historical_record_summary": payload.get("historical_record_summary") or [],
-        "monitoring_observations": payload.get("monitoring_observations") or [],
-        "medication_observations": payload.get("medication_observations") or [],
-        "information_gaps": payload.get("information_gaps") or context.get("information_gaps") or [],
-        "doctor_discussion_points": payload.get("doctor_discussion_points") or [],
-        "non_diagnostic_notice": DISCLAIMER_TEXT,
-    }
-    for key, value in result.items():
-        if key == "non_diagnostic_notice":
-            continue
-        if isinstance(value, str):
-            _assert_non_diagnostic(value)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, str):
-                    _assert_non_diagnostic(item)
-    return result
+def _assert_markdown_non_diagnostic(markdown: str) -> None:
+    for line in markdown.splitlines():
+        stripped = _strip_markdown_text(line.strip())
+        if stripped:
+            if line.lstrip().startswith("#") or re.match(r"^\d+[\.\u3001、\s]+", stripped):
+                continue
+            if any(marker in stripped for marker in ("不提供", "不替代", "不做", "不得", "仅供")):
+                continue
+            _assert_non_diagnostic(stripped)
 
 
-def _generate_report_payload(context: dict) -> dict:
+def _parse_text_content(data: dict) -> str:
+    message = data["choices"][0].get("message", {})
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        normalized = content.strip()
+        if normalized.startswith("```"):
+            normalized = re.sub(r"^```[a-zA-Z0-9_-]*\n?", "", normalized)
+            normalized = re.sub(r"\n?```$", "", normalized).strip()
+        return normalized
+    raise MedicalRecordsServiceError(status_code=502, detail="病历分析服务返回了空内容。")
+
+
+def _normalize_report_markdown(markdown: str) -> tuple[str, list[dict[str, str]]]:
+    _assert_markdown_non_diagnostic(markdown)
+    sections = _parse_report_markdown_sections(markdown)
+    canonical_markdown = _build_canonical_report_markdown(sections)
+    _assert_markdown_non_diagnostic(canonical_markdown)
+    return canonical_markdown, sections
+
+
+def _generate_report_markdown(context: dict) -> str:
     settings = get_settings()
     payload = {
         "model": settings.dashscope_medical_report_model,
@@ -770,91 +1295,34 @@ def _generate_report_payload(context: dict) -> dict:
                 "content": (
                     "你是 TremorGuard 的纵向健康报告整理助手。"
                     "只允许输出健康管理与复诊沟通材料，不得做诊断、分期、处方、药量调整或代替医生判断。"
-                    "请严格输出 JSON。"
+                    "请严格输出 Markdown 文档，不要返回 JSON，不要添加模板外章节。"
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    "请基于以下上下文生成病历联合健康报告，JSON 字段必须包含："
-                    "title, executive_summary, historical_record_summary, monitoring_observations, "
-                    "medication_observations, information_gaps, doctor_discussion_points, non_diagnostic_notice。\n"
+                    f"请严格按照以下固定模板输出 Markdown 文档，标题必须是《{HEALTH_REPORT_TEMPLATE_TITLE}》，"
+                    "章节顺序不可更改，所有章节都必须保留；若缺少数据，请在章节中明确写“数据不足/待补充”。\n\n"
+                    "固定章节：\n"
+                    f"{_build_template_outline_text()}\n\n"
+                    "上下文如下：\n"
                     f"{json.dumps(context, ensure_ascii=False)}"
                 ),
             },
         ],
-        "response_format": {"type": "json_object"},
         "temperature": 0.2,
-        "max_tokens": 1800,
+        "max_tokens": 3200,
     }
-    return _normalize_report_payload(_parse_json_content(_post_dashscope(payload)), context)
-
-
-def _pdf_escape_hex(text: str) -> str:
-    return text.encode("utf-16-be").hex().upper()
-
-
-def _wrap_text(text: str, limit: int = 28) -> list[str]:
-    lines: list[str] = []
-    current = ""
-    for char in text:
-        current += char
-        if len(current) >= limit:
-            lines.append(current)
-            current = ""
-    if current:
-        lines.append(current)
-    return lines or [""]
-
-
-def _build_pdf_bytes(title: str, sections: list[tuple[str, Sequence[str]]]) -> bytes:
-    lines = [title, DISCLAIMER_TEXT, ""]
-    for heading, items in sections:
-        lines.append(heading)
-        for item in items:
-            lines.extend(_wrap_text(f"• {item}"))
-        lines.append("")
-
-    content_lines = ["BT", "/F1 16 Tf", "48 792 Td", "20 TL"]
-    first = True
-    for line in lines:
-        safe_line = line or " "
-        if first:
-            content_lines.append(f"<{_pdf_escape_hex(safe_line)}> Tj")
-            first = False
-        else:
-            content_lines.append("T*")
-            content_lines.append(f"<{_pdf_escape_hex(safe_line)}> Tj")
-    content_lines.append("ET")
-    content_stream = "\n".join(content_lines).encode("latin-1")
-
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-        f"<< /Length {len(content_stream)} >>\nstream\n".encode("latin-1") + content_stream + b"\nendstream",
-        b"<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [6 0 R] >>",
-        b"<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> /DW 1000 >>",
-    ]
-
-    chunks = [b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"]
-    offsets = [0]
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(sum(len(part) for part in chunks))
-        chunks.append(f"{index} 0 obj\n".encode("latin-1"))
-        chunks.append(obj)
-        chunks.append(b"\nendobj\n")
-
-    xref_offset = sum(len(part) for part in chunks)
-    xref = [f"xref\n0 {len(objects) + 1}\n".encode("latin-1"), b"0000000000 65535 f \n"]
-    for offset in offsets[1:]:
-        xref.append(f"{offset:010d} 00000 n \n".encode("latin-1"))
-    trailer = (
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode(
-            "latin-1"
-        )
-    )
-    return b"".join(chunks + xref + [trailer])
+    rendered = _parse_text_content(_post_dashscope(payload))
+    if rendered.startswith("{"):
+        try:
+            legacy_payload = json.loads(rendered)
+        except json.JSONDecodeError:
+            return rendered
+        normalized_markdown = _render_report_markdown_from_payload(legacy_payload)
+        if normalized_markdown:
+            return normalized_markdown
+    return rendered
 
 
 def process_pending_file(session: Session, user: User, file_id: str) -> None:
@@ -964,7 +1432,7 @@ def create_report(
         archive_id=archive.id,
         user_id=user.id,
         version=next_version,
-        title="病历联合健康报告",
+        title=HEALTH_REPORT_TEMPLATE_TITLE,
         status="queued",
         pdf_status="queued",
         report_window_start=_window_start(today, payload.report_window_days),
@@ -974,7 +1442,10 @@ def create_report(
         medication_window_start=_window_start(today, payload.medication_window_days),
         medication_window_end=today,
         disclaimer_version=DISCLAIMER_VERSION,
+        template_name=HEALTH_REPORT_TEMPLATE_NAME,
+        template_version=HEALTH_REPORT_TEMPLATE_VERSION,
         prompt_version=PROMPT_VERSION,
+        pipeline_state=_initial_pipeline_state(),
     )
     session.add(report)
     session.flush()
@@ -1004,8 +1475,17 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
         return
 
     report.status = "processing"
-    report.pdf_status = "processing"
+    report.pdf_status = "queued"
     report.error_summary = None
+    report.template_name = report.template_name or HEALTH_REPORT_TEMPLATE_NAME
+    report.template_version = report.template_version or HEALTH_REPORT_TEMPLATE_VERSION
+    if report.title != HEALTH_REPORT_TEMPLATE_TITLE:
+        report.title = HEALTH_REPORT_TEMPLATE_TITLE
+    _set_pipeline_stage(report, "router", "succeeded", detail="请求已切换到专用报告生成 Agent。")
+    _set_pipeline_stage(report, "context_assembly", "processing", detail="正在装配数据库中的患者与监测上下文。")
+    _set_pipeline_stage(report, "template", "processing", detail="正在注入固定模板上下文。")
+    _set_pipeline_stage(report, "llm", "queued", detail="等待模板注入完成。")
+    _set_pipeline_stage(report, "pdf", "queued", detail="等待 Markdown 文档生成完成。")
     session.commit()
 
     try:
@@ -1019,20 +1499,48 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
                 .order_by(MedicalRecordExtraction.created_at)
             )
         )
-        context = _build_longitudinal_context(session, user, archive, report, extractions)
-        report_payload = _generate_report_payload(context)
-        report.input_snapshot = context
-        report.report_payload = report_payload
-        report.narrative_text = "\n".join(
-            [
-                report_payload["executive_summary"],
-                *[f"- {item}" for item in report_payload["doctor_discussion_points"]],
-                DISCLAIMER_TEXT,
-            ]
+        trigger_message = None
+        if isinstance(report.pipeline_state, dict):
+            request_context = report.pipeline_state.get("request_context")
+            if isinstance(request_context, dict):
+                trigger_message = request_context.get("trigger_message")
+                if not isinstance(trigger_message, str):
+                    trigger_message = None
+        context = REPORT_CONTEXT_ASSEMBLER.assemble(
+            session,
+            user,
+            report,
+            trigger_message=trigger_message,
         )
-        report.model_name = get_settings().dashscope_medical_report_model
+        report.input_snapshot = context
+        _set_pipeline_stage(report, "context_assembly", "succeeded", detail="数据库上下文装配完成。")
+        _set_pipeline_stage(report, "template", "succeeded", detail="已将《帕金森患者健康分析报告》模板注入模型上下文。")
+        _set_pipeline_stage(report, "report_agent_llm", "processing", detail="专用报告生成 Agent 正在生成 Markdown。")
+        _set_pipeline_stage(report, "llm", "processing", detail="正在生成 Markdown 健康报告。")
+        session.commit()
+
+        if extractions and get_settings().dashscope_api_key:
+            agent_result = HEALTH_REPORT_AGENT.generate(context=context)
+            raw_markdown = agent_result.markdown
+            report.model_name = agent_result.model_name
+        else:
+            raw_markdown = _build_lightweight_report_markdown(context)
+            report.model_name = "tremorguard-lightweight-template"
+        _set_pipeline_stage(report, "report_agent_llm", "succeeded", detail="专用报告生成 Agent 已返回 Markdown 文档。")
+        _set_pipeline_stage(report, "markdown_validation", "processing", detail="正在校验报告结构与内容质量。")
+
+        canonical_markdown, sections = _normalize_report_markdown(raw_markdown)
+        report.report_markdown = canonical_markdown
+        report.report_payload = _build_report_payload_from_sections(sections, context)
+        if report.template_name == HEALTH_REPORT_TEMPLATE_NAME and not context.get("document_summaries"):
+            report.report_payload["historical_record_summary"] = [
+                "本次报告未纳入历史病历资料，仅基于监测与用药记录生成。"
+            ]
+        report.narrative_text = canonical_markdown
         report.status = "succeeded"
         report.completed_at = _utcnow()
+        _set_pipeline_stage(report, "markdown_validation", "succeeded", detail="Markdown 结构校验完成。")
+        _set_pipeline_stage(report, "llm", "succeeded", detail="Markdown 报告已生成，可在线查看。")
 
         session.execute(delete(ReportInputLink).where(ReportInputLink.report_id == report.id))
         for extraction in extractions:
@@ -1055,18 +1563,45 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
                 )
             )
 
-        pdf_sections = [
-            ("执行摘要", [report_payload["executive_summary"]]),
-            ("历史病例整理", [str(item) for item in report_payload["historical_record_summary"]]),
-            ("监测观察", [str(item) for item in report_payload["monitoring_observations"]]),
-            ("用药与波动观察", [str(item) for item in report_payload["medication_observations"]]),
-            ("信息缺口", [str(item) for item in report_payload["information_gaps"]]),
-            ("复诊沟通建议", [str(item) for item in report_payload["doctor_discussion_points"]]),
-        ]
+        report.pdf_status = "processing"
+        _set_pipeline_stage(report, "pdf_render", "processing", detail="正在使用内置 PDF 适配器渲染文档。")
+        _set_pipeline_stage(report, "pdf", "processing", detail="正在将 Markdown 报告转换为 PDF。")
+        session.commit()
+
         pdf_path = _reports_path(archive.id) / f"{report.id}.pdf"
-        pdf_path.write_bytes(_build_pdf_bytes(report.title, pdf_sections))
-        report.pdf_status = "succeeded"
-        report.pdf_path = str(pdf_path)
+        try:
+            pdf_path.write_bytes(
+                MARKDOWN_PDF_RENDERER.render(
+                    report.title,
+                    canonical_markdown,
+                    metadata={
+                        "report_id": report.id,
+                        "template_name": report.template_name,
+                        "template_version": report.template_version,
+                    },
+                )
+            )
+            report.pdf_status = "succeeded"
+            report.pdf_path = str(pdf_path)
+            _set_pipeline_stage(report, "pdf_render", "succeeded", detail="PDF 适配器渲染完成。")
+            _set_pipeline_stage(report, "pdf", "succeeded", detail="PDF 已生成，可下载。")
+        except Exception as pdf_exc:  # noqa: BLE001
+            report.pdf_status = "failed"
+            report.pdf_path = None
+            _set_pipeline_stage(
+                report,
+                "pdf_render",
+                "failed",
+                detail="PDF 渲染失败。",
+                error=str(pdf_exc),
+            )
+            _set_pipeline_stage(
+                report,
+                "pdf",
+                "failed",
+                detail="Markdown 已生成，但 PDF 转换失败。",
+                error=str(pdf_exc),
+            )
         record_audit_log(
             session,
             user_id=user.id,
@@ -1074,13 +1609,19 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
             method="POST",
             action="longitudinal_report_succeeded",
             request_summary={"archive_id": archive.id},
-            response_summary={"report_id": report.id, "version": report.version},
+            response_summary={"report_id": report.id, "version": report.version, "pdf_status": report.pdf_status},
             risk_flag=True,
         )
     except Exception as exc:  # noqa: BLE001
         report.status = "failed"
         report.pdf_status = "failed"
         report.error_summary = str(exc)
+        _set_pipeline_stage(report, "context_assembly", "failed", detail="上下文装配或后续流程失败。", error=str(exc))
+        _set_pipeline_stage(report, "report_agent_llm", "failed", detail="专用报告生成 Agent 未完成生成。", error=str(exc))
+        _set_pipeline_stage(report, "markdown_validation", "failed", detail="Markdown 校验未完成。", error=str(exc))
+        _set_pipeline_stage(report, "pdf_render", "failed", detail="PDF 渲染未执行。", error=str(exc))
+        _set_pipeline_stage(report, "llm", "failed", detail="Markdown 文档生成失败。", error=str(exc))
+        _set_pipeline_stage(report, "pdf", "failed", detail="上游生成失败，未执行 PDF 转换。", error=str(exc))
         record_audit_log(
             session,
             user_id=user.id,
@@ -1093,6 +1634,120 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
         )
     finally:
         session.commit()
+
+
+def _select_archive_for_ai_health_report(session: Session, user: User) -> MedicalRecordArchive | None:
+    archives = list(
+        session.scalars(
+            select(MedicalRecordArchive)
+            .where(MedicalRecordArchive.user_id == user.id)
+            .order_by(desc(MedicalRecordArchive.updated_at), desc(MedicalRecordArchive.created_at))
+        )
+    )
+    if not archives:
+        return None
+
+    for archive in archives:
+        has_extraction = session.scalar(
+            select(MedicalRecordExtraction.id)
+            .where(
+                MedicalRecordExtraction.archive_id == archive.id,
+                MedicalRecordExtraction.user_id == user.id,
+                MedicalRecordExtraction.status == "succeeded",
+            )
+            .limit(1)
+        )
+        if has_extraction is not None:
+            return archive
+    return archives[0]
+
+
+def _ensure_ai_health_archive(session: Session, user: User) -> MedicalRecordArchive:
+    archive = _select_archive_for_ai_health_report(session, user)
+    if archive is not None:
+        return archive
+
+    _ensure_medical_record_consent(session, user.id)
+    archive = MedicalRecordArchive(
+        user_id=user.id,
+        title=AI_HEALTH_ARCHIVE_TITLE,
+        description="由 AI 医生聊天流自动创建，用于保存统一的 AI 健康报告。",
+    )
+    session.add(archive)
+    session.flush()
+    return archive
+
+
+def create_ai_health_report_for_chat(
+    session: Session,
+    user: User,
+    *,
+    report_window_days: int = 30,
+    monitoring_window_days: int = 30,
+    medication_window_days: int = 30,
+    trigger_message: str | None = None,
+    route_reason: str | None = None,
+) -> MedicalRecordReportDetailDTO:
+    _ensure_medical_record_consent(session, user.id)
+    archive = _ensure_ai_health_archive(session, user)
+    today = _utcnow().date()
+    next_version = int(
+        session.scalar(
+            select(func.coalesce(func.max(LongitudinalReport.version), 0)).where(
+                LongitudinalReport.archive_id == archive.id
+            )
+        )
+        or 0
+    ) + 1
+    report = LongitudinalReport(
+        archive_id=archive.id,
+        user_id=user.id,
+        version=next_version,
+        title=AI_HEALTH_REPORT_TITLE,
+        status="queued",
+        pdf_status="queued",
+        report_window_start=_window_start(today, report_window_days),
+        report_window_end=today,
+        monitoring_window_start=_window_start(today, monitoring_window_days),
+        monitoring_window_end=today,
+        medication_window_start=_window_start(today, medication_window_days),
+        medication_window_end=today,
+        disclaimer_version=DISCLAIMER_VERSION,
+        template_name=HEALTH_REPORT_TEMPLATE_NAME,
+        template_version=HEALTH_REPORT_TEMPLATE_VERSION,
+        prompt_version=PROMPT_VERSION,
+        pipeline_state=_initial_pipeline_state(),
+    )
+    if isinstance(report.pipeline_state, dict):
+        report.pipeline_state["router"] = _build_pipeline_stage(
+            "succeeded",
+            detail="已从通用 AI 医生 Agent 切换到专用报告生成 Agent。",
+        )
+        report.pipeline_state["request_context"] = {
+            "trigger_message": trigger_message,
+            "route_reason": route_reason,
+        }
+    session.add(report)
+    session.flush()
+    record_audit_log(
+        session,
+        user_id=user.id,
+        endpoint="/v1/ai/actions/health-report/generate",
+        method="POST",
+        action="create_ai_health_report",
+        request_summary={
+            "archive_id": archive.id,
+            "report_window_days": report_window_days,
+            "monitoring_window_days": monitoring_window_days,
+            "medication_window_days": medication_window_days,
+            "trigger_message": trigger_message,
+            "route_reason": route_reason,
+        },
+        response_summary={"report_id": report.id, "archive_id": archive.id, "version": report.version},
+        risk_flag=True,
+    )
+    session.commit()
+    return get_report_detail(session, user, report.id)
 
 
 def run_file_processing_task(user_id: str, file_id: str) -> None:
@@ -1129,6 +1784,8 @@ def preview_medical_record_file(session: Session, user: User, archive_id: str, f
 
 def download_report_pdf(session: Session, user: User, report_id: str) -> FileResponse | StreamingResponse:
     report = _ensure_report_owner(session, user, report_id)
+    download_name = _report_download_filename(report)
+    disposition_headers = _content_disposition_headers(download_name)
     record_audit_log(
         session,
         user_id=user.id,
@@ -1144,23 +1801,16 @@ def download_report_pdf(session: Session, user: User, report_id: str) -> FileRes
         return FileResponse(
             report.pdf_path,
             media_type="application/pdf",
-            filename=f"{report.id}.pdf",
+            filename=_ascii_filename_fallback(download_name),
+            headers=disposition_headers,
         )
 
-    if not isinstance(report.report_payload, dict):
+    markdown = report.report_markdown or _render_report_markdown_from_payload(report.report_payload)
+    if not markdown:
         raise HTTPException(status_code=404, detail="报告 PDF 尚未生成。")
-
-    pdf_sections = [
-        ("执行摘要", [str(report.report_payload.get("executive_summary") or "暂无摘要")]),
-        ("历史病例整理", [str(item) for item in report.report_payload.get("historical_record_summary", [])]),
-        ("监测观察", [str(item) for item in report.report_payload.get("monitoring_observations", [])]),
-        ("用药与波动观察", [str(item) for item in report.report_payload.get("medication_observations", [])]),
-        ("信息缺口", [str(item) for item in report.report_payload.get("information_gaps", [])]),
-        ("复诊沟通建议", [str(item) for item in report.report_payload.get("doctor_discussion_points", [])]),
-    ]
-    pdf_bytes = _build_pdf_bytes(report.title, pdf_sections)
+    pdf_bytes = MARKDOWN_PDF_RENDERER.render(report.title, markdown, metadata={"report_id": report.id})
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{report.id}.pdf"'},
+        headers=disposition_headers,
     )

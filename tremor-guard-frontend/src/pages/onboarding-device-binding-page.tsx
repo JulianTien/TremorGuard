@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { resolveAuthenticatedPath, useAuth } from '../lib/auth-context'
-import { bindDevice, getDeviceBinding } from '../lib/api'
+import { bindDemoDevice, bindDevice, getDeviceBinding } from '../lib/api'
 
 const DEMO_DEVICE_SERIAL = import.meta.env.VITE_DEMO_DEVICE_SERIAL ?? 'TG-V1.0-ESP-7B31'
 const DEMO_ACTIVATION_CODE = import.meta.env.VITE_DEMO_DEVICE_ACTIVATION_CODE ?? 'TG-ACT-7B31'
@@ -14,7 +14,7 @@ export function OnboardingDeviceBindingPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingCurrent, setIsLoadingCurrent] = useState(false)
-  const [isContinuing, setIsContinuing] = useState(false)
+  const [isBindingDemo, setIsBindingDemo] = useState(false)
   const [currentBindingLabel, setCurrentBindingLabel] = useState<string | null>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -57,17 +57,18 @@ export function OnboardingDeviceBindingPage() {
     }
   }
 
-  async function handleContinueToWorkspace() {
-    setIsContinuing(true)
+  async function handleBindDemoDevice() {
+    setIsBindingDemo(true)
     setError(null)
 
     try {
+      await bindDemoDevice()
       const user = await refreshCurrentUser()
       navigate(user ? resolveAuthenticatedPath(user) : '/overview', { replace: true })
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : '无法刷新当前账号状态。')
+      setError(requestError instanceof Error ? requestError.message : '无法完成演示设备绑定。')
     } finally {
-      setIsContinuing(false)
+      setIsBindingDemo(false)
     }
   }
 
@@ -97,11 +98,11 @@ export function OnboardingDeviceBindingPage() {
 
           <button
             type="button"
-            onClick={handleContinueToWorkspace}
-            disabled={isContinuing}
+            onClick={handleBindDemoDevice}
+            disabled={isBindingDemo}
             className="mt-3 rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isContinuing ? '跳转中...' : '继续进入工作台'}
+            {isBindingDemo ? '绑定中...' : '使用演示设备快速体验'}
           </button>
 
           {currentBindingLabel ? <p className="mt-4 text-sm text-slate-300">{currentBindingLabel}</p> : null}

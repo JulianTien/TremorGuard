@@ -1,0 +1,194 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e10]: tremor-guard-backend/app/services/ai_chat.py
+      - generic [ref=e11]: 监测摘要 + 大模型问答 + 安全边界
+    - generic [ref=e12]:
+      - complementary [ref=e13]:
+        - generic [ref=e14]: Neuro Pulse
+        - heading "AI 问答后端" [level=1] [ref=e15]
+        - paragraph [ref=e16]: 把用户提问、监测摘要和医疗安全边界一起送入模型，生成克制且可解释的健康管理回答。
+        - generic [ref=e17]:
+          - heading "展示重点" [level=2] [ref=e18]
+          - paragraph [ref=e19]: 保留关键函数和安全边界逻辑，让评委能一眼看出系统不是普通 CRUD，而是围绕监测数据、AI 推理与辅助决策构建的后端能力。
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: tremor-guard-backend/app/services/ai_chat.py
+          - generic [ref=e23]: Trae-style code view · 130%
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: "1"
+            - generic [ref=e27]: SYSTEM_PROMPT = """
+          - generic [ref=e28]:
+            - generic [ref=e29]: "2"
+            - generic [ref=e30]: 你是 TremorGuard（震颤卫士）的 AI 健康问答助手。
+          - generic [ref=e32]: "3"
+          - generic [ref=e34]:
+            - generic [ref=e35]: "4"
+            - generic [ref=e36]: 你的职责：
+          - generic [ref=e37]:
+            - generic [ref=e38]: "5"
+            - generic [ref=e39]: 1. 结合用户提供的问题与 TremorGuard 监测摘要，给出通俗、克制、可执行的健康管理解释。
+          - generic [ref=e40]:
+            - generic [ref=e41]: "6"
+            - generic [ref=e42]: 2. 可以帮助用户理解震颤波动、服药记录、监测趋势，以及为复诊沟通做准备。
+          - generic [ref=e43]:
+            - generic [ref=e44]: "7"
+            - generic [ref=e45]: 3. 必须始终使用中文回答。
+          - generic [ref=e47]: "8"
+          - generic [ref=e49]:
+            - generic [ref=e50]: "9"
+            - generic [ref=e51]: 严格限制：
+          - generic [ref=e52]:
+            - generic [ref=e53]: "10"
+            - generic [ref=e54]: 1. 你不是医生，不能做诊断、不能开药、不能调整处方或药量。
+          - generic [ref=e55]:
+            - generic [ref=e56]: "11"
+            - generic [ref=e57]: 2. 不得虚构不存在的监测数据、检查结果、影像结论或医生判断。
+          - generic [ref=e58]:
+            - generic [ref=e59]: "12"
+            - generic [ref=e60]: 3. 如果信息不足，要明确说明“目前信息不足，需要结合线下医生评估”。
+          - generic [ref=e61]:
+            - generic [ref=e62]: "13"
+            - generic [ref=e63]: 4. 如果用户出现胸痛、呼吸困难、意识障碍、严重跌倒外伤、无法进食饮水、突发明显恶化等紧急情况，要立即建议尽快线下就医或联系急救。
+          - generic [ref=e64]:
+            - generic [ref=e65]: "14"
+            - generic [ref=e66]: 5. 回答结尾补充一句简短提醒：内容仅供健康管理参考，请以专业医生意见为准。
+          - generic [ref=e67]:
+            - generic [ref=e68]: "15"
+            - generic [ref=e69]: "\"\"\".strip()"
+          - generic [ref=e71]: "16"
+          - generic [ref=e73]:
+            - generic [ref=e74]: "17"
+            - generic [ref=e75]: "def build_monitoring_context(clinical_session: Session, current_user: User) -> str:"
+          - generic [ref=e76]:
+            - generic [ref=e77]: "18"
+            - generic [ref=e78]: profile = clinical_session.scalar(
+          - generic [ref=e79]:
+            - generic [ref=e80]: "19"
+            - generic [ref=e81]: select(PatientProfile).where(PatientProfile.user_id == current_user.id)
+          - generic [ref=e82]:
+            - generic [ref=e83]: "20"
+            - generic [ref=e84]: )
+          - generic [ref=e85]:
+            - generic [ref=e86]: "21"
+            - generic [ref=e87]: device_binding, snapshot = get_latest_device_status(clinical_session, current_user.id)
+          - generic [ref=e88]:
+            - generic [ref=e89]: "22"
+            - generic [ref=e90]: latest_event = clinical_session.scalar(
+          - generic [ref=e91]:
+            - generic [ref=e92]: "23"
+            - generic [ref=e93]: select(TremorEvent)
+          - generic [ref=e94]:
+            - generic [ref=e95]: "24"
+            - generic [ref=e96]: .where(TremorEvent.user_id == current_user.id)
+          - generic [ref=e97]:
+            - generic [ref=e98]: "25"
+            - generic [ref=e99]: .order_by(desc(TremorEvent.start_at))
+          - generic [ref=e100]:
+            - generic [ref=e101]: "26"
+            - generic [ref=e102]: )
+          - generic [ref=e104]: "27"
+          - generic [ref=e106]:
+            - generic [ref=e107]: "28"
+            - generic [ref=e108]: metric_summaries = build_metric_summaries(events_today, events_yesterday)
+          - generic [ref=e109]:
+            - generic [ref=e110]: "29"
+            - generic [ref=e111]: trend_points = build_trend_points(events_today, medications, target_date)
+          - generic [ref=e112]:
+            - generic [ref=e113]: "30"
+            - generic [ref=e114]: overview_insight = build_overview_insight(trend_points, medications)
+          - generic [ref=e115]:
+            - generic [ref=e116]: "31"
+            - generic [ref=e117]: return "\n".join(
+          - generic [ref=e118]:
+            - generic [ref=e119]: "32"
+            - generic [ref=e120]: "["
+          - generic [ref=e121]:
+            - generic [ref=e122]: "33"
+            - generic [ref=e123]: "\"以下是 TremorGuard 当前可用的用户上下文，请仅在有帮助时引用：\","
+          - generic [ref=e124]:
+            - generic [ref=e125]: "34"
+            - generic [ref=e126]: "f\"- 设备状态：{device_summary}\","
+          - generic [ref=e127]:
+            - generic [ref=e128]: "35"
+            - generic [ref=e129]: "f\"- 当日监测摘要：{metrics_summary}\","
+          - generic [ref=e130]:
+            - generic [ref=e131]: "36"
+            - generic [ref=e132]: "f\"- 当日服药记录：{_format_medications(medications)}\","
+          - generic [ref=e133]:
+            - generic [ref=e134]: "37"
+            - generic [ref=e135]: "f\"- 系统摘要：{overview_insight.summary}\","
+          - generic [ref=e136]:
+            - generic [ref=e137]: "38"
+            - generic [ref=e138]: "]"
+          - generic [ref=e139]:
+            - generic [ref=e140]: "39"
+            - generic [ref=e141]: )
+          - generic [ref=e143]: "40"
+          - generic [ref=e145]:
+            - generic [ref=e146]: "41"
+            - generic [ref=e147]: def create_ai_chat_completion(
+          - generic [ref=e148]:
+            - generic [ref=e149]: "42"
+            - generic [ref=e150]: "clinical_session: Session,"
+          - generic [ref=e151]:
+            - generic [ref=e152]: "43"
+            - generic [ref=e153]: "current_user: User,"
+          - generic [ref=e154]:
+            - generic [ref=e155]: "44"
+            - generic [ref=e156]: "messages: list[AiChatMessageInput],"
+          - generic [ref=e157]:
+            - generic [ref=e158]: "45"
+            - generic [ref=e159]: ") -> AiChatResponse:"
+          - generic [ref=e160]:
+            - generic [ref=e161]: "46"
+            - generic [ref=e162]: settings = get_settings()
+          - generic [ref=e163]:
+            - generic [ref=e164]: "47"
+            - generic [ref=e165]: context = build_monitoring_context(clinical_session, current_user)
+          - generic [ref=e166]:
+            - generic [ref=e167]: "48"
+            - generic [ref=e168]: request_messages = _build_request_messages(messages, context)
+          - generic [ref=e169]:
+            - generic [ref=e170]: "49"
+            - generic [ref=e171]: "payload = {"
+          - generic [ref=e172]:
+            - generic [ref=e173]: "50"
+            - generic [ref=e174]: "\"model\": settings.dashscope_chat_model,"
+          - generic [ref=e175]:
+            - generic [ref=e176]: "51"
+            - generic [ref=e177]: "\"messages\": request_messages,"
+          - generic [ref=e178]:
+            - generic [ref=e179]: "52"
+            - generic [ref=e180]: "\"temperature\": 0.3,"
+          - generic [ref=e181]:
+            - generic [ref=e182]: "53"
+            - generic [ref=e183]: "\"max_tokens\": 700,"
+          - generic [ref=e184]:
+            - generic [ref=e185]: "54"
+            - generic [ref=e186]: "}"
+          - generic [ref=e187]:
+            - generic [ref=e188]: "55"
+            - generic [ref=e189]: response = httpx.post(
+          - generic [ref=e190]:
+            - generic [ref=e191]: "56"
+            - generic [ref=e192]: "f\"{settings.dashscope_base_url}/chat/completions\","
+          - generic [ref=e193]:
+            - generic [ref=e194]: "57"
+            - generic [ref=e195]: "headers={\"Authorization\": f\"Bearer {settings.dashscope_api_key.get_secret_value()}\"},"
+          - generic [ref=e196]:
+            - generic [ref=e197]: "58"
+            - generic [ref=e198]: json=payload,
+          - generic [ref=e199]:
+            - generic [ref=e200]: "59"
+            - generic [ref=e201]: timeout=settings.dashscope_timeout_seconds,
+          - generic [ref=e202]:
+            - generic [ref=e203]: "60"
+            - generic [ref=e204]: )
+          - generic [ref=e205]:
+            - generic [ref=e206]: "61"
+            - generic [ref=e207]: "if response.status_code >= 400:"
+          - generic [ref=e208]:
+            - generic [ref=e209]: "62"
+            - generic [ref=e210]: "raise AiChatServiceError(status_code=502, detail=f\"AI 服务调用失败：{_extract_error_message(response)}\")"

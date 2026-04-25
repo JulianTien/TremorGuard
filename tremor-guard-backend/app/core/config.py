@@ -38,8 +38,10 @@ class Settings(BaseSettings):
     dashscope_api_key: SecretStr | None = None
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     dashscope_chat_model: str = "qwen-plus"
+    dashscope_rehab_guidance_model: str = "qwen-plus"
     dashscope_medical_extraction_model: str = "qwen-vl-plus"
     dashscope_medical_report_model: str = "qwen-plus"
+    dashscope_report_agent_model: str = "qwen-plus"
     dashscope_medical_prompt_version: str = "medical-records-v1"
     dashscope_timeout_seconds: float = 60.0
     dashscope_enable_search: bool = False

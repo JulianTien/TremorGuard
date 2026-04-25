@@ -1,0 +1,368 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e10]: tremor-guard-backend/app/services/dashboard.py
+      - generic [ref=e11]: 趋势聚合 + 可视化数据生成 + AI 摘要洞察
+    - generic [ref=e12]:
+      - complementary [ref=e13]:
+        - generic [ref=e14]: Neuro Pulse
+        - heading "趋势洞察与可视化聚合" [level=1] [ref=e15]
+        - paragraph [ref=e16]: 把震颤事件与服药记录转成仪表盘指标、时间趋势和 AI 摘要，支撑前端数据卡片与趋势图。
+        - generic [ref=e17]:
+          - heading "展示重点" [level=2] [ref=e18]
+          - paragraph [ref=e19]: 保留关键函数和安全边界逻辑，让评委能一眼看出系统不是普通 CRUD，而是围绕监测数据、AI 推理与辅助决策构建的后端能力。
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: tremor-guard-backend/app/services/dashboard.py
+          - generic [ref=e23]: Trae-style code view · 130%
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: "1"
+            - generic [ref=e27]: "def get_latest_device_status(session: Session, user_id: str) -> tuple[DeviceBinding | None, DeviceStatusSnapshot | None]:"
+          - generic [ref=e28]:
+            - generic [ref=e29]: "2"
+            - generic [ref=e30]: device_binding = session.scalar(
+          - generic [ref=e31]:
+            - generic [ref=e32]: "3"
+            - generic [ref=e33]: select(DeviceBinding)
+          - generic [ref=e34]:
+            - generic [ref=e35]: "4"
+            - generic [ref=e36]: .where(
+          - generic [ref=e37]:
+            - generic [ref=e38]: "5"
+            - generic [ref=e39]: DeviceBinding.user_id == user_id,
+          - generic [ref=e40]:
+            - generic [ref=e41]: "6"
+            - generic [ref=e42]: DeviceBinding.binding_status == "bound",
+          - generic [ref=e43]:
+            - generic [ref=e44]: "7"
+            - generic [ref=e45]: DeviceBinding.is_active.is_(True),
+          - generic [ref=e46]:
+            - generic [ref=e47]: "8"
+            - generic [ref=e48]: )
+          - generic [ref=e49]:
+            - generic [ref=e50]: "9"
+            - generic [ref=e51]: .order_by(desc(DeviceBinding.bound_at), desc(DeviceBinding.created_at))
+          - generic [ref=e52]:
+            - generic [ref=e53]: "10"
+            - generic [ref=e54]: )
+          - generic [ref=e55]:
+            - generic [ref=e56]: "11"
+            - generic [ref=e57]: snapshot = session.scalar(
+          - generic [ref=e58]:
+            - generic [ref=e59]: "12"
+            - generic [ref=e60]: select(DeviceStatusSnapshot)
+          - generic [ref=e61]:
+            - generic [ref=e62]: "13"
+            - generic [ref=e63]: .where(DeviceStatusSnapshot.user_id == user_id)
+          - generic [ref=e64]:
+            - generic [ref=e65]: "14"
+            - generic [ref=e66]: .order_by(desc(DeviceStatusSnapshot.recorded_at))
+          - generic [ref=e67]:
+            - generic [ref=e68]: "15"
+            - generic [ref=e69]: )
+          - generic [ref=e70]:
+            - generic [ref=e71]: "16"
+            - generic [ref=e72]: return device_binding, snapshot
+          - generic [ref=e74]: "17"
+          - generic [ref=e76]:
+            - generic [ref=e77]: "18"
+            - generic [ref=e78]: def build_metric_summaries(
+          - generic [ref=e79]:
+            - generic [ref=e80]: "19"
+            - generic [ref=e81]: "events_today: list[TremorEvent], events_yesterday: list[TremorEvent]"
+          - generic [ref=e82]:
+            - generic [ref=e83]: "20"
+            - generic [ref=e84]: ") -> list[TremorMetricSummaryDTO]:"
+          - generic [ref=e85]:
+            - generic [ref=e86]: "21"
+            - generic [ref=e87]: count_today = len(events_today)
+          - generic [ref=e88]:
+            - generic [ref=e89]: "22"
+            - generic [ref=e90]: count_yesterday = len(events_yesterday)
+          - generic [ref=e91]:
+            - generic [ref=e92]: "23"
+            - generic [ref=e93]: avg_hz = round(mean([event.dominant_hz for event in events_today]), 1) if events_today else 0
+          - generic [ref=e94]:
+            - generic [ref=e95]: "24"
+            - generic [ref=e96]: avg_duration = round(mean([event.duration_sec for event in events_today])) if events_today else 0
+          - generic [ref=e97]:
+            - generic [ref=e98]: "25"
+            - generic [ref=e99]: longest_duration = max((event.duration_sec for event in events_today), default=0)
+          - generic [ref=e101]: "26"
+          - generic [ref=e103]:
+            - generic [ref=e104]: "27"
+            - generic [ref=e105]: delta_percent = 0
+          - generic [ref=e106]:
+            - generic [ref=e107]: "28"
+            - generic [ref=e108]: "if count_yesterday:"
+          - generic [ref=e109]:
+            - generic [ref=e110]: "29"
+            - generic [ref=e111]: delta_percent = round(((count_today - count_yesterday) / count_yesterday) * 100)
+          - generic [ref=e112]:
+            - generic [ref=e113]: "30"
+            - generic [ref=e114]: "subtitle = f\"较昨日 {'+' if delta_percent >= 0 else ''}{delta_percent}%\""
+          - generic [ref=e115]:
+            - generic [ref=e116]: "31"
+            - generic [ref=e117]: tone = "alert" if count_today >= count_yesterday else "safe"
+          - generic [ref=e119]: "32"
+          - generic [ref=e121]:
+            - generic [ref=e122]: "33"
+            - generic [ref=e123]: return [
+          - generic [ref=e124]:
+            - generic [ref=e125]: "34"
+            - generic [ref=e126]: TremorMetricSummaryDTO(
+          - generic [ref=e127]:
+            - generic [ref=e128]: "35"
+            - generic [ref=e129]: label="今日发作频次",
+          - generic [ref=e130]:
+            - generic [ref=e131]: "36"
+            - generic [ref=e132]: value=count_today,
+          - generic [ref=e133]:
+            - generic [ref=e134]: "37"
+            - generic [ref=e135]: unit="次",
+          - generic [ref=e136]:
+            - generic [ref=e137]: "38"
+            - generic [ref=e138]: subtitle=subtitle,
+          - generic [ref=e139]:
+            - generic [ref=e140]: "39"
+            - generic [ref=e141]: tone=tone,
+          - generic [ref=e142]:
+            - generic [ref=e143]: "40"
+            - generic [ref=e144]: ),
+          - generic [ref=e145]:
+            - generic [ref=e146]: "41"
+            - generic [ref=e147]: TremorMetricSummaryDTO(
+          - generic [ref=e148]:
+            - generic [ref=e149]: "42"
+            - generic [ref=e150]: label="平均主频率",
+          - generic [ref=e151]:
+            - generic [ref=e152]: "43"
+            - generic [ref=e153]: value=avg_hz,
+          - generic [ref=e154]:
+            - generic [ref=e155]: "44"
+            - generic [ref=e156]: unit="Hz",
+          - generic [ref=e157]:
+            - generic [ref=e158]: "45"
+            - generic [ref=e159]: "subtitle=\"典型PD频段: 4-6Hz\","
+          - generic [ref=e160]:
+            - generic [ref=e161]: "46"
+            - generic [ref=e162]: tone="neutral",
+          - generic [ref=e163]:
+            - generic [ref=e164]: "47"
+            - generic [ref=e165]: ),
+          - generic [ref=e166]:
+            - generic [ref=e167]: "48"
+            - generic [ref=e168]: TremorMetricSummaryDTO(
+          - generic [ref=e169]:
+            - generic [ref=e170]: "49"
+            - generic [ref=e171]: label="平均持续时长",
+          - generic [ref=e172]:
+            - generic [ref=e173]: "50"
+            - generic [ref=e174]: value=avg_duration,
+          - generic [ref=e175]:
+            - generic [ref=e176]: "51"
+            - generic [ref=e177]: unit="秒",
+          - generic [ref=e178]:
+            - generic [ref=e179]: "52"
+            - generic [ref=e180]: "subtitle=f\"最长: {longest_duration}秒\","
+          - generic [ref=e181]:
+            - generic [ref=e182]: "53"
+            - generic [ref=e183]: tone="neutral",
+          - generic [ref=e184]:
+            - generic [ref=e185]: "54"
+            - generic [ref=e186]: ),
+          - generic [ref=e187]:
+            - generic [ref=e188]: "55"
+            - generic [ref=e189]: "]"
+          - generic [ref=e191]: "56"
+          - generic [ref=e193]:
+            - generic [ref=e194]: "57"
+            - generic [ref=e195]: "def build_trend_points(events: list[TremorEvent], medications: list[MedicationLog], target_date: date) -> list[TremorTrendPointDTO]:"
+          - generic [ref=e196]:
+            - generic [ref=e197]: "58"
+            - generic [ref=e198]: "bucket_values: dict[int, list[float]] = defaultdict(list)"
+          - generic [ref=e199]:
+            - generic [ref=e200]: "59"
+            - generic [ref=e201]: "medication_by_bucket: dict[int, MedicationLog] = {}"
+          - generic [ref=e203]: "60"
+          - generic [ref=e205]:
+            - generic [ref=e206]: "61"
+            - generic [ref=e207]: "for event in events:"
+          - generic [ref=e208]:
+            - generic [ref=e209]: "62"
+            - generic [ref=e210]: local_time = to_display_datetime(event.start_at)
+          - generic [ref=e211]:
+            - generic [ref=e212]: "63"
+            - generic [ref=e213]: bucket = min(local_time.hour // 2, 11)
+          - generic [ref=e214]:
+            - generic [ref=e215]: "64"
+            - generic [ref=e216]: bucket_values[bucket].append(round(event.rms_amplitude, 2))
+          - generic [ref=e218]: "65"
+          - generic [ref=e220]:
+            - generic [ref=e221]: "66"
+            - generic [ref=e222]: "for medication in medications:"
+          - generic [ref=e223]:
+            - generic [ref=e224]: "67"
+            - generic [ref=e225]: local_time = to_display_datetime(medication.taken_at)
+          - generic [ref=e226]:
+            - generic [ref=e227]: "68"
+            - generic [ref=e228]: bucket = min(local_time.hour // 2, 11)
+          - generic [ref=e229]:
+            - generic [ref=e230]: "69"
+            - generic [ref=e231]: medication_by_bucket[bucket] = medication
+          - generic [ref=e233]: "70"
+          - generic [ref=e235]:
+            - generic [ref=e236]: "71"
+            - generic [ref=e237]: "points: list[TremorTrendPointDTO] = []"
+          - generic [ref=e238]:
+            - generic [ref=e239]: "72"
+            - generic [ref=e240]: "for bucket in range(12):"
+          - generic [ref=e241]:
+            - generic [ref=e242]: "73"
+            - generic [ref=e243]: hour = bucket * 2
+          - generic [ref=e244]:
+            - generic [ref=e245]: "74"
+            - generic [ref=e246]: "label = f\"{hour:02d}:00\""
+          - generic [ref=e247]:
+            - generic [ref=e248]: "75"
+            - generic [ref=e249]: amplitudes = bucket_values.get(bucket, [])
+          - generic [ref=e250]:
+            - generic [ref=e251]: "76"
+            - generic [ref=e252]: medication = medication_by_bucket.get(bucket)
+          - generic [ref=e253]:
+            - generic [ref=e254]: "77"
+            - generic [ref=e255]: point_label = (
+          - generic [ref=e256]:
+            - generic [ref=e257]: "78"
+            - generic [ref=e258]: to_display_datetime(medication.taken_at).strftime("%H:%M 服药")
+          - generic [ref=e259]:
+            - generic [ref=e260]: "79"
+            - generic [ref=e261]: if medication
+          - generic [ref=e262]:
+            - generic [ref=e263]: "80"
+            - generic [ref=e264]: else None
+          - generic [ref=e265]:
+            - generic [ref=e266]: "81"
+            - generic [ref=e267]: )
+          - generic [ref=e268]:
+            - generic [ref=e269]: "82"
+            - generic [ref=e270]: points.append(
+          - generic [ref=e271]:
+            - generic [ref=e272]: "83"
+            - generic [ref=e273]: TremorTrendPointDTO(
+          - generic [ref=e274]:
+            - generic [ref=e275]: "84"
+            - generic [ref=e276]: time=label,
+          - generic [ref=e277]:
+            - generic [ref=e278]: "85"
+            - generic [ref=e279]: amplitude=round(mean(amplitudes), 2) if amplitudes else 0.0,
+          - generic [ref=e280]:
+            - generic [ref=e281]: "86"
+            - generic [ref=e282]: label=point_label,
+          - generic [ref=e283]:
+            - generic [ref=e284]: "87"
+            - generic [ref=e285]: medication_taken=bool(medication),
+          - generic [ref=e286]:
+            - generic [ref=e287]: "88"
+            - generic [ref=e288]: )
+          - generic [ref=e289]:
+            - generic [ref=e290]: "89"
+            - generic [ref=e291]: )
+          - generic [ref=e293]: "90"
+          - generic [ref=e295]:
+            - generic [ref=e296]: "91"
+            - generic [ref=e297]: points.append(
+          - generic [ref=e298]:
+            - generic [ref=e299]: "92"
+            - generic [ref=e300]: TremorTrendPointDTO(
+          - generic [ref=e301]:
+            - generic [ref=e302]: "93"
+            - generic [ref=e303]: time="24:00",
+          - generic [ref=e304]:
+            - generic [ref=e305]: "94"
+            - generic [ref=e306]: amplitude=points[-1].amplitude if points else 0.0,
+          - generic [ref=e307]:
+            - generic [ref=e308]: "95"
+            - generic [ref=e309]: )
+          - generic [ref=e310]:
+            - generic [ref=e311]: "96"
+            - generic [ref=e312]: )
+          - generic [ref=e313]:
+            - generic [ref=e314]: "97"
+            - generic [ref=e315]: return points
+          - generic [ref=e317]: "98"
+          - generic [ref=e319]:
+            - generic [ref=e320]: "99"
+            - generic [ref=e321]: def build_overview_insight(
+          - generic [ref=e322]:
+            - generic [ref=e323]: "100"
+            - generic [ref=e324]: "trend_points: list[TremorTrendPointDTO], medications: list[MedicationLog]"
+          - generic [ref=e325]:
+            - generic [ref=e326]: "101"
+            - generic [ref=e327]: ") -> AiInsightDTO:"
+          - generic [ref=e328]:
+            - generic [ref=e329]: "102"
+            - generic [ref=e330]: peak_points = sorted(
+          - generic [ref=e331]:
+            - generic [ref=e332]: "103"
+            - generic [ref=e333]: "[point for point in trend_points if point.amplitude > 0],"
+          - generic [ref=e334]:
+            - generic [ref=e335]: "104"
+            - generic [ref=e336]: "key=lambda point: point.amplitude,"
+          - generic [ref=e337]:
+            - generic [ref=e338]: "105"
+            - generic [ref=e339]: reverse=True,
+          - generic [ref=e340]:
+            - generic [ref=e341]: "106"
+            - generic [ref=e342]: )[:2]
+          - generic [ref=e343]:
+            - generic [ref=e344]: "107"
+            - generic [ref=e345]: medication_labels = (
+          - generic [ref=e346]:
+            - generic [ref=e347]: "108"
+            - generic [ref=e348]: "\", \".join(to_display_datetime(med.taken_at).strftime(\"%H:%M\") for med in medications)"
+          - generic [ref=e349]:
+            - generic [ref=e350]: "109"
+            - generic [ref=e351]: or "暂无记录"
+          - generic [ref=e352]:
+            - generic [ref=e353]: "110"
+            - generic [ref=e354]: )
+          - generic [ref=e356]: "111"
+          - generic [ref=e358]:
+            - generic [ref=e359]: "112"
+            - generic [ref=e360]: "if peak_points:"
+          - generic [ref=e361]:
+            - generic [ref=e362]: "113"
+            - generic [ref=e363]: peak_label = " 及 ".join(point.time for point in peak_points)
+          - generic [ref=e364]:
+            - generic [ref=e365]: "114"
+            - generic [ref=e366]: summary = (
+          - generic [ref=e367]:
+            - generic [ref=e368]: "115"
+            - generic [ref=e369]: "f\"今日 {peak_label} 左右出现较明显的震颤波峰。结合您的服药时间（{medication_labels}），\""
+          - generic [ref=e370]:
+            - generic [ref=e371]: "116"
+            - generic [ref=e372]: "\"这些时段值得在复诊时向医生重点说明，用于观察药效波动规律。\""
+          - generic [ref=e373]:
+            - generic [ref=e374]: "117"
+            - generic [ref=e375]: )
+          - generic [ref=e376]:
+            - generic [ref=e377]: "118"
+            - generic [ref=e378]: "else:"
+          - generic [ref=e379]:
+            - generic [ref=e380]: "119"
+            - generic [ref=e381]: summary = (
+          - generic [ref=e382]:
+            - generic [ref=e383]: "120"
+            - generic [ref=e384]: "f\"今日暂未观测到明显异常波峰。系统已持续关联您的服药时间（{medication_labels}），\""
+          - generic [ref=e385]:
+            - generic [ref=e386]: "121"
+            - generic [ref=e387]: "\"后续若出现集中波动，可用于辅助医生评估药效周期。\""
+          - generic [ref=e388]:
+            - generic [ref=e389]: "122"
+            - generic [ref=e390]: )
+          - generic [ref=e392]: "123"
+          - generic [ref=e394]:
+            - generic [ref=e395]: "124"
+            - generic [ref=e396]: return AiInsightDTO(id="overview-insight", title="AI 医生摘要洞察", summary=summary)

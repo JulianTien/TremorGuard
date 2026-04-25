@@ -5,6 +5,7 @@ from app.api.routes import (
     auth,
     dashboard,
     devices,
+    health_reports,
     ingest,
     medical_records,
     medications,
@@ -20,6 +21,7 @@ api_router.include_router(me.router, prefix="/me", tags=["me"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(medications.router, prefix="/medications", tags=["medications"])
 api_router.include_router(rehab_guidance.router, prefix="/rehab-guidance", tags=["rehab-guidance"])
+api_router.include_router(health_reports.router, prefix="/health-reports", tags=["health-reports"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(medical_records.router, prefix="/medical-records", tags=["medical-records"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])

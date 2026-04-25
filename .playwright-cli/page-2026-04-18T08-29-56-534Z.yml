@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - img [ref=e12]
+      - generic [ref=e14]:
+        - heading "Neuro Pulse" [level=1] [ref=e15]
+        - paragraph [ref=e16]: Detecting movement patterns. Enabling earlier support.
+    - heading "Welcome back" [level=2] [ref=e17]
+    - paragraph [ref=e18]: Continue your care journey with Neuro Pulse.
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - img [ref=e22]
+        - generic [ref=e24]: Continuous tremor monitoring
+      - generic [ref=e25]:
+        - img [ref=e27]
+        - generic [ref=e29]: AI health assistant
+      - generic [ref=e30]:
+        - img [ref=e32]
+        - generic [ref=e34]: Structured clinical reports
+  - generic [ref=e36]:
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - heading "Sign in" [level=2] [ref=e39]
+        - paragraph [ref=e40]: Use your account to access dashboards, reports, and device insights.
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Account (email or username)
+          - generic [ref=e44]:
+            - img [ref=e45]
+            - textbox "Account (email or username)" [ref=e47]:
+              - /placeholder: Email address or username
+        - generic [ref=e48]:
+          - generic [ref=e49]: Password
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - img [ref=e52]
+              - textbox "Password" [ref=e54]:
+                - /placeholder: Enter your password
+            - button [ref=e55] [cursor=pointer]:
+              - img [ref=e56]
+        - generic [ref=e59]:
+          - generic [ref=e60] [cursor=pointer]:
+            - checkbox "Remember me" [ref=e61]
+            - generic [ref=e62]: Remember me
+          - link "Forgot password?" [ref=e63] [cursor=pointer]:
+            - /url: "#"
+        - button "Sign in" [ref=e64] [cursor=pointer]:
+          - generic [ref=e65]: Sign in
+      - generic [ref=e68]: or
+      - paragraph [ref=e69]:
+        - text: Don't have an account?
+        - link "Create one" [ref=e70] [cursor=pointer]:
+          - /url: /register
+    - link "Back to home" [ref=e72] [cursor=pointer]:
+      - /url: /
+      - img [ref=e73]
+      - generic [ref=e75]: Back to home

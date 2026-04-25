@@ -1,5 +1,7 @@
 # 震颤卫士（Tremor Guard）系统架构设计图
 
+> 本文档聚焦 TremorGuard 的技术分层和跨层数据流。患者侧一期的主业务、信息架构与 AI 服务边界，请参考 [patient_business_architecture.md](/Users/peng/Documents/trae_projects/TremorGuard/docs/patient_business_architecture.md)。
+
 ## 系统架构概述
 
 本架构设计图展示了震颤卫士系统的四个核心层级：硬件层、云端层、AI层和应用层，以及它们之间的完整数据流向。

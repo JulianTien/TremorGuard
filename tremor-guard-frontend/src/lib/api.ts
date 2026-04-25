@@ -1,4 +1,6 @@
 import type {
+  AiChatAction,
+  AiChatActionCard,
   AiChatUsage,
   AiInsight,
   AuthSession,
@@ -7,15 +9,20 @@ import type {
   CurrentUser,
   DeviceBinding,
   DeviceStatus,
+  HealthReportDetail,
+  HealthReportSummary,
+  LegacyMonitoringReportSummary,
   MedicalRecordArchiveDetail,
   MedicalRecordArchiveSummary,
   MedicalRecordFile,
   MedicalRecordInputSnapshot,
   MedicalRecordProcessingStatus,
   MedicalRecordReportDetail,
+  MedicalRecordReportPipelineState,
   MedicalRecordReportSection,
   MedicalRecordReportSummary,
   MedicationEntry,
+  OverviewEvidenceReadiness,
   PatientProfile,
   ProfileCompletionStatus,
   RehabConflictStatus,
@@ -24,7 +31,6 @@ import type {
   RehabPlan,
   RehabPlanItem,
   RehabPlanStatus,
-  ReportSummary,
   TremorMetricSummary,
   TremorTrendPoint,
 } from '../types/domain'
@@ -105,6 +111,19 @@ interface BackendOverviewResponse {
     summary: string
     emphasis?: string
   }
+  evidence_readiness: {
+    has_device_binding: boolean
+    has_monitoring_events: boolean
+    monitoring_event_count: number
+    has_medication_logs: boolean
+    medication_log_count: number
+    has_medical_record_archives: boolean
+    medical_record_archive_count: number
+    ai_interpretation_ready: boolean
+    rehab_plan_ready: boolean
+    health_report_ready: boolean
+    next_steps: string[]
+  }
 }
 
 interface BackendProfileResponse {
@@ -128,6 +147,10 @@ interface BackendRehabPlanItem {
   duration_minutes: number
   frequency_label: string
   cautions?: string[] | null
+  goal?: string | null
+  preparation?: string[] | null
+  steps?: string[] | null
+  completion_check?: string | null
 }
 
 interface BackendRehabPlan {
@@ -173,7 +196,12 @@ interface BackendReportsResponse {
     type: string
     size: string
     status: string
+    kind?: 'legacy_monitoring_summary'
   }>
+}
+
+interface BackendHealthReportsResponse {
+  health_reports: BackendMedicalRecordReportSummary[]
 }
 
 interface BackendMedicalRecordArchiveSummary {
@@ -223,6 +251,7 @@ interface BackendMedicalRecordFile {
 
 interface BackendMedicalRecordReportSummary {
   id: string
+  agent_type?: string | null
   archive_id: string
   archive_title?: string | null
   version: number
@@ -233,6 +262,33 @@ interface BackendMedicalRecordReportSummary {
   pdf_ready: boolean
   pdf_file_name?: string | null
   report_window_label?: string | null
+  template_name?: string | null
+  template_version?: string | null
+  quality_warnings?: string[] | null
+  pipeline_state?: {
+    template: {
+      status: MedicalRecordProcessingStatus
+      started_at?: string | null
+      completed_at?: string | null
+      detail?: string | null
+      error?: string | null
+    }
+    llm: {
+      status: MedicalRecordProcessingStatus
+      started_at?: string | null
+      completed_at?: string | null
+      detail?: string | null
+      error?: string | null
+    }
+    pdf: {
+      status: MedicalRecordProcessingStatus
+      started_at?: string | null
+      completed_at?: string | null
+      detail?: string | null
+      error?: string | null
+    }
+    updated_at?: string | null
+  } | null
 }
 
 interface BackendMedicalRecordArchiveDetailResponse {
@@ -256,6 +312,7 @@ interface BackendMedicalRecordReportDetailResponse {
       title: string
       body: string
     }> | null
+    report_markdown?: string | null
     source_files?: BackendMedicalRecordFile[] | null
     history?: BackendMedicalRecordReportSummary[] | null
     input_snapshot?: {
@@ -285,6 +342,24 @@ interface BackendAiChatResponse {
     completion_tokens?: number | null
     total_tokens?: number | null
   } | null
+  action_cards?: Array<{
+    type: 'rehab_plan_candidate' | 'health_report_candidate'
+    agent_type?: string | null
+    title: string
+    summary: string
+    status: string
+    resource_id: string
+    resource_path?: string | null
+    pipeline_state?: BackendMedicalRecordReportSummary['pipeline_state']
+    actions?: Array<{
+      key: string
+      label: string
+      kind: AiChatAction['kind']
+      api_path?: string | null
+      url?: string | null
+      download_name?: string | null
+    }> | null
+  }> | null
 }
 
 interface BackendDeviceBinding {
@@ -312,12 +387,22 @@ export interface OverviewViewData {
   deviceStatus: DeviceStatus
   trendPoints: TremorTrendPoint[]
   overviewInsight: AiInsight
+  evidenceReadiness: OverviewEvidenceReadiness
 }
 
 export interface ProfileViewData {
   patientProfile: PatientProfile
   deviceStatus: DeviceStatus
   consentSettings: ConsentSettings
+}
+
+interface DownloadFileNameOptions {
+  preferredName?: string | null
+  patientName?: string | null
+  generatedAt?: string | null
+  version?: number | null
+  reportId?: string | null
+  defaultLabel?: string
 }
 
 export interface PatientProfileInput {
@@ -341,6 +426,13 @@ export interface AiChatResult {
   }
   model: string
   usage?: AiChatUsage | null
+  actionCards: AiChatActionCard[]
+}
+
+type BackendAiChatStreamDonePayload = BackendAiChatResponse
+
+interface StreamAiChatOptions {
+  onChunk?: (content: string) => void
 }
 
 export class ApiError extends Error {
@@ -383,6 +475,24 @@ function mapDeviceStatus(status: BackendOverviewResponse['device_status']): Devi
     lastSync: status.last_sync,
     availableDays: status.available_days,
     firmware: status.firmware,
+  }
+}
+
+function mapOverviewEvidenceReadiness(
+  readiness: BackendOverviewResponse['evidence_readiness'],
+): OverviewEvidenceReadiness {
+  return {
+    hasDeviceBinding: readiness.has_device_binding,
+    hasMonitoringEvents: readiness.has_monitoring_events,
+    monitoringEventCount: readiness.monitoring_event_count,
+    hasMedicationLogs: readiness.has_medication_logs,
+    medicationLogCount: readiness.medication_log_count,
+    hasMedicalRecordArchives: readiness.has_medical_record_archives,
+    medicalRecordArchiveCount: readiness.medical_record_archive_count,
+    aiInterpretationReady: readiness.ai_interpretation_ready,
+    rehabPlanReady: readiness.rehab_plan_ready,
+    healthReportReady: readiness.health_report_ready,
+    nextSteps: readiness.next_steps,
   }
 }
 
@@ -469,12 +579,46 @@ function mapMedicalRecordFile(file: BackendMedicalRecordFile): MedicalRecordFile
   }
 }
 
+function mapReportPipelineState(
+  pipelineState?: BackendMedicalRecordReportSummary['pipeline_state'] | null,
+): MedicalRecordReportPipelineState | null {
+  if (!pipelineState) {
+    return null
+  }
+
+  return {
+    template: {
+      status: pipelineState.template.status,
+      startedAt: pipelineState.template.started_at,
+      completedAt: pipelineState.template.completed_at,
+      detail: pipelineState.template.detail,
+      error: pipelineState.template.error,
+    },
+    llm: {
+      status: pipelineState.llm.status,
+      startedAt: pipelineState.llm.started_at,
+      completedAt: pipelineState.llm.completed_at,
+      detail: pipelineState.llm.detail,
+      error: pipelineState.llm.error,
+    },
+    pdf: {
+      status: pipelineState.pdf.status,
+      startedAt: pipelineState.pdf.started_at,
+      completedAt: pipelineState.pdf.completed_at,
+      detail: pipelineState.pdf.detail,
+      error: pipelineState.pdf.error,
+    },
+    updatedAt: pipelineState.updated_at,
+  }
+}
+
 function mapMedicalRecordReportSummary(
   report: BackendMedicalRecordReportSummary,
   archiveTitleFallback = '',
 ): MedicalRecordReportSummary {
   return {
     id: report.id,
+    agentType: report.agent_type,
     archiveId: report.archive_id,
     archiveTitle: report.archive_title ?? archiveTitleFallback,
     version: report.version,
@@ -485,6 +629,10 @@ function mapMedicalRecordReportSummary(
     pdfReady: report.pdf_ready,
     pdfFileName: report.pdf_file_name,
     reportWindowLabel: report.report_window_label,
+    templateName: report.template_name,
+    templateVersion: report.template_version,
+    pipelineState: mapReportPipelineState(report.pipeline_state),
+    qualityWarnings: (report.quality_warnings ?? []).map((warning) => String(warning)),
   }
 }
 
@@ -523,6 +671,69 @@ function mapMedicalRecordInputSnapshot(
   }
 }
 
+function mapAiChatAction(action: NonNullable<NonNullable<BackendAiChatResponse['action_cards']>[number]['actions']>[number]): AiChatAction {
+  return {
+    key: action.key,
+    label: action.label,
+    kind: action.kind,
+    apiPath: action.api_path ?? null,
+    url: action.url ?? null,
+    downloadName: action.download_name ?? null,
+  }
+}
+
+function mapAiChatActionCard(
+  card: NonNullable<BackendAiChatResponse['action_cards']>[number],
+): AiChatActionCard {
+  return {
+    type: card.type,
+    agentType: card.agent_type ?? null,
+    title: card.title,
+    summary: card.summary,
+    status: card.status,
+    resourceId: card.resource_id,
+    resourcePath: card.resource_path ?? null,
+    pipelineState: mapReportPipelineState(card.pipeline_state),
+    actions: (card.actions ?? []).map(mapAiChatAction),
+  }
+}
+
+function mapAiChatResult(payload: BackendAiChatResponse): AiChatResult {
+  return {
+    message: payload.message,
+    model: payload.model,
+    usage: payload.usage
+      ? {
+          promptTokens: payload.usage.prompt_tokens,
+          completionTokens: payload.usage.completion_tokens,
+          totalTokens: payload.usage.total_tokens,
+        }
+      : null,
+    actionCards: (payload.action_cards ?? []).map(mapAiChatActionCard),
+  }
+}
+
+function parseSseEventBlock(block: string) {
+  let event = 'message'
+  const dataLines: string[] = []
+
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) {
+      event = line.slice('event:'.length).trim() || 'message'
+      continue
+    }
+
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trimStart())
+    }
+  }
+
+  return {
+    event,
+    data: dataLines.join('\n'),
+  }
+}
+
 function mapRiskLabel(
   riskFlag: string | { label?: string | null; message?: string | null } | null | undefined,
 ) {
@@ -557,6 +768,10 @@ function mapRehabPlanItem(item: BackendRehabPlanItem): RehabPlanItem {
     durationMinutes: item.duration_minutes,
     frequencyLabel: item.frequency_label,
     cautions: (item.cautions ?? []).map((caution) => String(caution)),
+    goal: item.goal ?? null,
+    preparation: (item.preparation ?? []).map((step) => String(step)),
+    steps: (item.steps ?? []).map((step) => String(step)),
+    completionCheck: item.completion_check ?? null,
   }
 }
 
@@ -667,6 +882,55 @@ function buildRequestHeaders(headers?: HeadersInit, includeJson = false): Header
     requestHeaders.set('Content-Type', 'application/json')
   }
   return requestHeaders
+}
+
+function sanitizeDownloadFileNameSegment(value?: string | null) {
+  return (value ?? '')
+    .normalize('NFKC')
+    .split('')
+    .map((character) => {
+      const codePoint = character.charCodeAt(0)
+      if ('<>:"/\\|?*'.includes(character) || codePoint < 32) {
+        return ' '
+      }
+      return character
+    })
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildDownloadFileName({
+  preferredName,
+  patientName,
+  generatedAt,
+  version,
+  reportId,
+  defaultLabel = 'tremorguard-report',
+}: DownloadFileNameOptions) {
+  const normalizedPreferredName = sanitizeDownloadFileNameSegment(preferredName)
+  if (normalizedPreferredName) {
+    return normalizedPreferredName.toLowerCase().endsWith('.pdf')
+      ? normalizedPreferredName
+      : `${normalizedPreferredName}.pdf`
+  }
+
+  const normalizedPatientName = sanitizeDownloadFileNameSegment(patientName)
+  const dateSegment = generatedAt
+    ? sanitizeDownloadFileNameSegment(generatedAt).slice(0, 10).replace(/-/g, '')
+    : ''
+  const versionSegment =
+    typeof version === 'number' && Number.isFinite(version) ? `v${version}` : ''
+  const reportSegment = sanitizeDownloadFileNameSegment(reportId)
+  const segments = [
+    defaultLabel,
+    normalizedPatientName,
+    dateSegment,
+    versionSegment,
+    reportSegment && !versionSegment ? reportSegment : '',
+  ].filter(Boolean)
+
+  return `${segments.join('-') || 'tremorguard-report'}.pdf`
 }
 
 function notifyAuthChanged() {
@@ -874,6 +1138,21 @@ export async function bindDevice(
   }
 }
 
+export async function bindDemoDevice(): Promise<{
+  deviceBinding: DeviceBinding | null
+  completion: ProfileCompletionStatus
+}> {
+  const response = await authenticatedFetch('/v1/me/device-binding/demo', {
+    method: 'POST',
+  })
+  const result = await parseJson<BackendDeviceBindingResponse>(response)
+
+  return {
+    deviceBinding: mapDeviceBinding(result.device_binding),
+    completion: mapCompletionStatus(result.completion),
+  }
+}
+
 export async function unbindDevice(): Promise<{
   deviceBinding: DeviceBinding | null
   completion: ProfileCompletionStatus
@@ -903,6 +1182,7 @@ export async function getOverview(date = DEFAULT_DATA_DATE): Promise<OverviewVie
       medicationTaken: point.medication_taken,
     })),
     overviewInsight: payload.overview_insight,
+    evidenceReadiness: mapOverviewEvidenceReadiness(payload.evidence_readiness),
   }
 }
 
@@ -912,7 +1192,7 @@ export async function getMedicationEntries(date = DEFAULT_DATA_DATE): Promise<Me
   return payload.medication_entries
 }
 
-export async function getReports(): Promise<ReportSummary[]> {
+export async function getLegacyMonitoringSummaries(): Promise<LegacyMonitoringReportSummary[]> {
   const response = await authenticatedFetch('/v1/reports')
   const payload = await parseJson<BackendReportsResponse>(response)
   return payload.report_summaries.map((report) => ({
@@ -921,7 +1201,12 @@ export async function getReports(): Promise<ReportSummary[]> {
     type: report.type,
     size: report.size,
     status: report.status,
+    kind: report.kind ?? 'legacy_monitoring_summary',
   }))
+}
+
+export async function getReports(): Promise<LegacyMonitoringReportSummary[]> {
+  return getLegacyMonitoringSummaries()
 }
 
 export async function createReport(date = DEFAULT_DATA_DATE) {
@@ -930,6 +1215,12 @@ export async function createReport(date = DEFAULT_DATA_DATE) {
     body: JSON.stringify({ report_date: date }),
   })
   return parseJson(response)
+}
+
+export async function getHealthReports(): Promise<HealthReportSummary[]> {
+  const response = await authenticatedFetch('/v1/health-reports')
+  const payload = await parseJson<BackendHealthReportsResponse>(response)
+  return payload.health_reports.map((report) => mapMedicalRecordReportSummary(report))
 }
 
 export async function getMedicalRecordArchives(): Promise<MedicalRecordArchiveSummary[]> {
@@ -1013,6 +1304,33 @@ export async function getMedicalRecordReport(reportId: string): Promise<MedicalR
     ...mapMedicalRecordReportSummary(payload),
     disclaimer: payload.disclaimer,
     archiveDescription: payload.archive_description,
+    reportMarkdown: payload.report_markdown,
+    sections,
+    sourceFiles: (payload.source_files ?? []).map(mapMedicalRecordFile),
+    history: (payload.history ?? []).map((report) =>
+      mapMedicalRecordReportSummary(report, payload.archive_title ?? ''),
+    ),
+    inputSnapshot: mapMedicalRecordInputSnapshot(payload.input_snapshot),
+  }
+}
+
+export async function getHealthReport(reportId: string): Promise<HealthReportDetail> {
+  const response = await authenticatedFetch(`/v1/health-reports/${reportId}`)
+  const payload = await parseJson<BackendMedicalRecordReportDetailResponse['report']>(response)
+
+  const sections: MedicalRecordReportSection[] = (payload.sections ?? []).map(
+    (section, index) => ({
+      id: section.id ?? `${payload.id}-section-${index}`,
+      title: section.title,
+      body: section.body,
+    }),
+  )
+
+  return {
+    ...mapMedicalRecordReportSummary(payload),
+    disclaimer: payload.disclaimer,
+    archiveDescription: payload.archive_description,
+    reportMarkdown: payload.report_markdown,
     sections,
     sourceFiles: (payload.source_files ?? []).map(mapMedicalRecordFile),
     history: (payload.history ?? []).map((report) =>
@@ -1050,7 +1368,10 @@ export async function confirmRehabGuidancePlan(planId: string): Promise<RehabGui
   return mapRehabGuidanceResponse(payload)
 }
 
-export async function downloadMedicalRecordReportPdf(reportId: string, fileName?: string) {
+export async function downloadMedicalRecordReportPdf(
+  reportId: string,
+  options?: DownloadFileNameOptions | string,
+) {
   const response = await authenticatedFetch(`/v1/medical-records/reports/${reportId}/pdf`)
 
   if (!response.ok) {
@@ -1062,11 +1383,100 @@ export async function downloadMedicalRecordReportPdf(reportId: string, fileName?
   const url = window.URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = fileName ?? `medical-record-report-${reportId}.pdf`
+  anchor.download =
+    typeof options === 'string'
+      ? buildDownloadFileName({
+          preferredName: options,
+          reportId,
+          defaultLabel: 'medical-record-report',
+        })
+      : buildDownloadFileName({
+          ...options,
+          reportId,
+          defaultLabel: 'TremorGuard-health-report',
+        })
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
   window.URL.revokeObjectURL(url)
+}
+
+export async function downloadHealthReportPdf(
+  reportId: string,
+  options?: DownloadFileNameOptions | string,
+) {
+  const response = await authenticatedFetch(`/v1/health-reports/${reportId}/pdf`)
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new ApiError(response.status, detail || 'PDF 下载失败。')
+  }
+
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download =
+    typeof options === 'string'
+      ? buildDownloadFileName({
+          preferredName: options,
+          reportId,
+          defaultLabel: 'TremorGuard-health-report',
+        })
+      : buildDownloadFileName({
+          ...options,
+          reportId,
+          defaultLabel: 'TremorGuard-health-report',
+        })
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+export async function downloadPdfFromApiPath(
+  apiPath: string,
+  options?: DownloadFileNameOptions | string,
+) {
+  const response = await authenticatedFetch(apiPath)
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new ApiError(response.status, detail || 'PDF 下载失败。')
+  }
+
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download =
+    typeof options === 'string'
+      ? buildDownloadFileName({ preferredName: options })
+      : buildDownloadFileName({
+          ...options,
+          defaultLabel: 'TremorGuard-health-report',
+        })
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+export async function executeAiAction(apiPath: string, method: 'GET' | 'POST' = 'POST'): Promise<AiChatResult> {
+  const response = await authenticatedFetch(apiPath, {
+    method,
+    body: method === 'POST' ? JSON.stringify({}) : undefined,
+  })
+  const payload = await parseJson<BackendAiChatResponse>(response)
+  return mapAiChatResult(payload)
+}
+
+export async function getAiHealthReportActionCard(reportId: string): Promise<AiChatActionCard> {
+  const response = await authenticatedFetch(`/v1/ai/actions/health-report/${reportId}`, {
+    method: 'GET',
+  })
+  const payload = await parseJson<NonNullable<BackendAiChatResponse['action_cards']>[number]>(response)
+  return mapAiChatActionCard(payload)
 }
 
 export async function sendAiChat(messages: ChatMessage[]): Promise<AiChatResult> {
@@ -1080,16 +1490,78 @@ export async function sendAiChat(messages: ChatMessage[]): Promise<AiChatResult>
     }),
   })
   const payload = await parseJson<BackendAiChatResponse>(response)
+  return mapAiChatResult(payload)
+}
 
-  return {
-    message: payload.message,
-    model: payload.model,
-    usage: payload.usage
-      ? {
-          promptTokens: payload.usage.prompt_tokens,
-          completionTokens: payload.usage.completion_tokens,
-          totalTokens: payload.usage.total_tokens,
-        }
-      : null,
+export async function streamAiChat(
+  messages: ChatMessage[],
+  options: StreamAiChatOptions = {},
+): Promise<AiChatResult> {
+  const response = await authenticatedFetch('/v1/ai/chat/stream', {
+    method: 'POST',
+    body: JSON.stringify({
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    }),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new ApiError(response.status, detail || 'AI 服务暂时不可用，请稍后重试。')
   }
+
+  if (!response.body) {
+    throw new ApiError(502, 'AI 服务未返回流式数据。')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalResult: AiChatResult | null = null
+
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+
+    let separatorMatch = buffer.match(/\r?\n\r?\n/)
+    while (separatorMatch && separatorMatch.index !== undefined) {
+      const separatorLength = separatorMatch[0].length
+      const block = buffer.slice(0, separatorMatch.index).trim()
+      buffer = buffer.slice(separatorMatch.index + separatorLength)
+
+      if (block) {
+        const { event, data } = parseSseEventBlock(block)
+        const parsed = data ? (JSON.parse(data) as Record<string, unknown>) : {}
+
+        if (event === 'chunk') {
+          const content = typeof parsed.content === 'string' ? parsed.content : ''
+          if (content) {
+            options.onChunk?.(content)
+          }
+        } else if (event === 'done') {
+          finalResult = mapAiChatResult(parsed as unknown as BackendAiChatStreamDonePayload)
+        } else if (event === 'error') {
+          const detail =
+            typeof parsed.detail === 'string' && parsed.detail
+              ? parsed.detail
+              : 'AI 服务暂时不可用，请稍后重试。'
+          throw new ApiError(response.status || 502, detail)
+        }
+      }
+
+      separatorMatch = buffer.match(/\r?\n\r?\n/)
+    }
+
+    if (done) {
+      break
+    }
+  }
+
+  if (!finalResult) {
+    throw new ApiError(502, 'AI 服务流式响应未正常结束。')
+  }
+
+  return finalResult
 }

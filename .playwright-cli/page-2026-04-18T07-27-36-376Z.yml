@@ -1,0 +1,162 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "震颤卫士 Tremor Guard" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+        - generic [ref=e12]:
+          - generic [ref=e13]: 震颤卫士
+          - generic [ref=e14]: Tremor Guard
+      - generic [ref=e15]:
+        - button "功能特性" [ref=e16] [cursor=pointer]
+        - button "技术原理" [ref=e17] [cursor=pointer]
+        - button "分级标准" [ref=e18] [cursor=pointer]
+        - link "控制台 (Demo)" [ref=e19] [cursor=pointer]:
+          - /url: /dashboard
+        - link "登录" [ref=e21] [cursor=pointer]:
+          - /url: /login
+        - link "立即体验" [ref=e22] [cursor=pointer]:
+          - /url: /register
+          - text: 立即体验
+          - img [ref=e23]
+  - main [ref=e25]:
+    - generic [ref=e26]:
+      - generic:
+        - generic:
+          - img
+          - img
+      - generic [ref=e28]:
+        - generic [ref=e33]: AI 驱动的帕金森震颤监测系统
+        - heading "看见看不见的 震颤" [level=1] [ref=e34]:
+          - text: 看见看不见的
+          - generic [ref=e35]:
+            - text: 震颤
+            - img [ref=e36]
+        - paragraph [ref=e38]:
+          - text: 利用高精度
+          - strong [ref=e39]: FFT 频谱分析
+          - text: 与
+          - strong [ref=e40]: Claude AI
+          - text: ， 捕捉 4-6Hz 的细微特征，为帕金森患者提供医疗级全天候守护。
+        - generic [ref=e41]:
+          - link "开始免费监测" [ref=e42] [cursor=pointer]:
+            - /url: /register
+            - generic [ref=e44]:
+              - text: 开始免费监测
+              - img [ref=e45]
+          - button "观看演示视频" [ref=e47] [cursor=pointer]:
+            - img [ref=e49]
+            - text: 观看演示视频
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - generic [ref=e53]: 125Hz
+            - generic [ref=e54]: 高频采样
+          - generic [ref=e55]:
+            - generic [ref=e56]: 0.1g
+            - generic [ref=e57]: 超高灵敏度
+          - generic [ref=e58]:
+            - generic [ref=e59]: AI+
+            - generic [ref=e60]: 智能诊断
+          - generic [ref=e61]:
+            - generic [ref=e62]: 24h
+            - generic [ref=e63]: 实时守护
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - img [ref=e71]
+        - heading "医疗级 MPU6050 传感器" [level=3] [ref=e73]
+        - paragraph [ref=e74]: 搭载 6 轴运动处理组件，通过 I2C 接口以 100kHz 频率传输数据，精确捕捉每一个微小动作。
+        - generic [ref=e75]:
+          - text: 了解更多
+          - img [ref=e76]
+      - generic [ref=e78]:
+        - img [ref=e81]
+        - heading "FFT 频谱分析算法" [level=3] [ref=e83]
+        - paragraph [ref=e84]: 内置高性能数字信号处理芯片，实时执行快速傅里叶变换，精准锁定 4-6Hz 帕金森特征频段。
+        - generic [ref=e85]:
+          - text: 了解更多
+          - img [ref=e86]
+      - generic [ref=e88]:
+        - img [ref=e91]
+        - heading "Claude AI 智能诊断" [level=3] [ref=e93]
+        - paragraph [ref=e94]: 集成 Anthropic 最新 AI 模型，针对震颤数据生成深度医疗报告，提供个性化康复建议。
+        - generic [ref=e95]:
+          - text: 了解更多
+          - img [ref=e96]
+    - generic [ref=e100]:
+      - generic [ref=e101]:
+        - heading "震颤严重度分级演示" [level=2] [ref=e102]
+        - paragraph [ref=e103]: 全域共振演示：拖动滑块模拟震颤强度，观察手部与环境参考系（圆环）产生的共振效应。
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]: 震颤强度
+              - generic [ref=e109]: 0级
+            - slider [ref=e110] [cursor=pointer]: "0"
+            - generic [ref=e111]:
+              - generic [ref=e112]: 静止
+              - generic [ref=e113]: 轻微
+              - generic [ref=e114]: 轻度
+              - generic [ref=e115]: 中度
+              - generic [ref=e116]: 重度
+          - generic [ref=e117]:
+            - heading "正常" [level=3] [ref=e118]
+            - paragraph [ref=e119]: 无明显震颤 (RMS < 2.5g)
+        - img [ref=e130]
+    - generic [ref=e136]:
+      - heading "准备好掌控您的健康了吗？" [level=2] [ref=e137]
+      - paragraph [ref=e138]:
+        - text: 加入成千上万的帕金森患者和护理者，开启科学监测新时代。
+        - text: 无需专业设备，只需一个智能手环。
+      - generic [ref=e139]:
+        - link "立即免费注册" [ref=e140] [cursor=pointer]:
+          - /url: /register
+        - link "登录账号" [ref=e141] [cursor=pointer]:
+          - /url: /login
+  - contentinfo [ref=e142]:
+    - generic [ref=e143]:
+      - generic [ref=e144]:
+        - generic [ref=e145]:
+          - generic [ref=e146]:
+            - img [ref=e148]
+            - generic [ref=e150]: 震颤卫士
+          - paragraph [ref=e151]: 专为帕金森震颤设计的智能监测与分析平台。通过科技的力量，让关爱触手可及。
+        - generic [ref=e152]:
+          - heading "产品" [level=4] [ref=e153]
+          - list [ref=e154]:
+            - listitem [ref=e155]:
+              - link "功能特性" [ref=e156] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e157]:
+              - link "硬件设备" [ref=e158] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e159]:
+              - link "APP下载" [ref=e160] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e161]:
+              - link "价格方案" [ref=e162] [cursor=pointer]:
+                - /url: "#"
+        - generic [ref=e163]:
+          - heading "支持" [level=4] [ref=e164]
+          - list [ref=e165]:
+            - listitem [ref=e166]:
+              - link "帮助中心" [ref=e167] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e168]:
+              - link "开发文档" [ref=e169] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e170]:
+              - link "联系我们" [ref=e171] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e172]:
+              - link "隐私政策" [ref=e173] [cursor=pointer]:
+                - /url: "#"
+      - generic [ref=e174]:
+        - paragraph [ref=e175]: © 2024 Tremor Guard. All rights reserved.
+        - generic [ref=e176]:
+          - link "Terms" [ref=e177] [cursor=pointer]:
+            - /url: "#"
+          - link "Privacy" [ref=e178] [cursor=pointer]:
+            - /url: "#"
+          - link "Cookies" [ref=e179] [cursor=pointer]:
+            - /url: "#"

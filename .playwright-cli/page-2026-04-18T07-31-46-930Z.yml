@@ -1,0 +1,20 @@
+- generic [ref=e3]:
+  - img "lottie-animation-container" [ref=e6]
+  - 'heading "502: SERVICE_UNAVAILABLE" [level=1] [ref=e8]'
+  - generic [ref=e9]: Service is not responding. It may be because the service is not listening on the correct port or the service has crashed and stopped responding.
+  - generic [ref=e10]:
+    - text: If you are the owner of this website, go to the
+    - link "Zeabur dashboard" [ref=e11] [cursor=pointer]:
+      - /url: https://dash.zeabur.com
+    - text: for more info,
+    - text: or copy the prompt below to Zeabur AI for troubleshooting assistance.
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - img [ref=e14]
+      - generic [ref=e16]: "Ask Zeabur Agent:"
+    - generic [ref=e17]:
+      - textbox [ref=e18]: "I'm encountering a 502 Bad Gateway error on my Zeabur-deployed service. ## Error Details - Status: 502 Bad Gateway - Request ID: - URL: https://parkinson.zeabur.app/ ## Possible Causes 1. The service is not listening on the correct port - I can check the Network tab in the Zeabur dashboard to see which port is being listened on. 2. The service crashed or stopped responding - I can check the Logs tab to investigate the error. Please help me troubleshoot this 502 error based on the above information."
+      - button "Copy" [ref=e19] [cursor=pointer]:
+        - img [ref=e20]
+        - generic [ref=e23]: Copy
+    - paragraph [ref=e24]: Paste to Zeabur Agent after copying for step-by-step troubleshooting.

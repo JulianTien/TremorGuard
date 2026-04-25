@@ -82,6 +82,53 @@ export function RehabPlanCard({ title, description, plan, footer }: RehabPlanCar
                   <p className="mt-2 text-sm text-amber-900">请按页面提示适度训练，若不适加重请暂停并联系医生。</p>
                 )}
               </div>
+
+              <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50 px-3 py-3">
+                <p className="text-xs font-medium text-teal-800">训练目标</p>
+                <p className="mt-2 text-sm text-teal-900">
+                  {item.goal ?? `本训练用于帮助完成${item.name}这一模块。`}
+                </p>
+              </div>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-xs font-medium text-slate-700">训练前准备</p>
+                  {item.preparation.length > 0 ? (
+                    <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                      {item.preparation.map((step) => (
+                        <li key={step}>- {step}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">按当前页面环境保持安全、稳定后开始训练。</p>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-xs font-medium text-slate-700">完成标准</p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    {item.completionCheck ?? '完成后应保持动作稳定，且没有出现明显不适。'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
+                <p className="text-xs font-medium text-slate-700">具体训练步骤</p>
+                {item.steps.length > 0 ? (
+                  <ol className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+                    {item.steps.map((step, index) => (
+                      <li key={`${item.templateId}-${index}`} className="flex gap-2">
+                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                          {index + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">当前方案暂无分步骤说明，请结合训练时长和频率缓慢完成。</p>
+                )}
+              </div>
             </div>
           ))}
         </div>

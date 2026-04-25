@@ -1,0 +1,2 @@
+[    2665ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ https://parkinson.zeabur.app/login?redirect=/dashboard:0
+[   22884ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://parkinson.zeabur.app/api/auth/login:0

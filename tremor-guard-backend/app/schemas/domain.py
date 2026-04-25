@@ -62,6 +62,36 @@ class AiChatUsage(BaseModel):
     total_tokens: int | None = None
 
 
+AiChatActionKind = Literal[
+    "confirm_plan",
+    "view_plan_detail",
+    "download_plan_pdf",
+    "view_report_online",
+    "download_report_pdf",
+]
+
+
+class AiChatActionDTO(BaseModel):
+    key: str
+    label: str
+    kind: AiChatActionKind
+    api_path: str | None = None
+    url: str | None = None
+    download_name: str | None = None
+
+
+class AiChatActionCardDTO(BaseModel):
+    type: Literal["rehab_plan_candidate", "health_report_candidate"]
+    agent_type: str | None = None
+    title: str
+    summary: str
+    status: str
+    resource_id: str
+    resource_path: str | None = None
+    pipeline_state: "MedicalRecordReportPipelineStateDTO | None" = None
+    actions: list[AiChatActionDTO] = Field(default_factory=list)
+
+
 class AiChatRequest(BaseModel):
     messages: list[AiChatMessageInput] = Field(min_length=1, max_length=20)
 
@@ -70,6 +100,7 @@ class AiChatResponse(BaseModel):
     message: AiChatMessageResponse
     model: str
     usage: AiChatUsage | None = None
+    action_cards: list[AiChatActionCardDTO] = Field(default_factory=list)
 
 
 class MedicationEntryDTO(BaseModel):
@@ -86,6 +117,7 @@ class ReportSummaryDTO(BaseModel):
     type: str
     size: str
     status: str
+    kind: Literal["legacy_monitoring_summary"] = "legacy_monitoring_summary"
 
 
 class ConsentSettingsDTO(BaseModel):
@@ -150,6 +182,21 @@ class DashboardOverviewResponse(BaseModel):
     device_status: DeviceStatusDTO
     trend_points: list[TremorTrendPointDTO]
     overview_insight: AiInsightDTO
+    evidence_readiness: "OverviewEvidenceReadinessDTO"
+
+
+class OverviewEvidenceReadinessDTO(BaseModel):
+    has_device_binding: bool
+    has_monitoring_events: bool
+    monitoring_event_count: int
+    has_medication_logs: bool
+    medication_log_count: int
+    has_medical_record_archives: bool
+    medical_record_archive_count: int
+    ai_interpretation_ready: bool
+    rehab_plan_ready: bool
+    health_report_ready: bool
+    next_steps: list[str] = Field(default_factory=list)
 
 
 class MedicationListResponse(BaseModel):
@@ -293,6 +340,7 @@ class CreateMedicalRecordReportRequest(BaseModel):
 
 class MedicalRecordReportSummaryDTO(BaseModel):
     id: str
+    agent_type: str | None = None
     archive_id: str
     archive_title: str | None = None
     version: int
@@ -308,6 +356,30 @@ class MedicalRecordReportSummaryDTO(BaseModel):
     pdf_ready: bool
     pdf_file_name: str | None = None
     report_window_label: str | None = None
+    template_name: str | None = None
+    template_version: str | None = None
+    pipeline_state: "MedicalRecordReportPipelineStateDTO | None" = None
+    quality_warnings: list[str] = Field(default_factory=list)
+
+
+class MedicalRecordReportPipelineStageDTO(BaseModel):
+    status: AsyncJobStatus
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    detail: str | None = None
+    error: str | None = None
+
+
+class MedicalRecordReportPipelineStateDTO(BaseModel):
+    router: MedicalRecordReportPipelineStageDTO | None = None
+    context_assembly: MedicalRecordReportPipelineStageDTO | None = None
+    report_agent_llm: MedicalRecordReportPipelineStageDTO | None = None
+    markdown_validation: MedicalRecordReportPipelineStageDTO | None = None
+    pdf_render: MedicalRecordReportPipelineStageDTO | None = None
+    template: MedicalRecordReportPipelineStageDTO
+    llm: MedicalRecordReportPipelineStageDTO
+    pdf: MedicalRecordReportPipelineStageDTO
+    updated_at: datetime | None = None
 
 
 class MedicalRecordReportDetailDTO(MedicalRecordReportSummaryDTO):
@@ -324,6 +396,7 @@ class MedicalRecordReportDetailDTO(MedicalRecordReportSummaryDTO):
     medication_window_end: date
     input_snapshot: dict[str, Any] | None = None
     report_payload: dict[str, Any] | None = None
+    report_markdown: str | None = None
     narrative_text: str | None = None
     has_pdf: bool
     sections: list[dict[str, str]] = Field(default_factory=list)
@@ -339,6 +412,16 @@ class CreateMedicalRecordReportResponse(BaseModel):
     report: MedicalRecordReportSummaryDTO
 
 
+class GenerateAiHealthReportRequest(BaseModel):
+    report_window_days: int = Field(default=30, ge=7, le=365)
+    monitoring_window_days: int = Field(default=30, ge=7, le=365)
+    medication_window_days: int = Field(default=30, ge=7, le=365)
+
+
+class HealthReportListResponse(BaseModel):
+    health_reports: list[MedicalRecordReportSummaryDTO]
+
+
 class RehabPlanItemDTO(BaseModel):
     template_id: str
     name: str
@@ -346,6 +429,10 @@ class RehabPlanItemDTO(BaseModel):
     duration_minutes: int
     frequency_label: str
     cautions: list[str] = Field(default_factory=list)
+    goal: str | None = None
+    preparation: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
+    completion_check: str | None = None
 
 
 class RehabPlanDTO(BaseModel):
@@ -362,6 +449,26 @@ class RehabPlanDTO(BaseModel):
     generated_at: datetime
     confirmed_at: datetime | None = None
     activated_at: datetime | None = None
+
+
+class RehabPlanSummaryDTO(BaseModel):
+    id: str
+    title: str
+    status: RehabPlanStatus
+    summary: str
+    generated_at: datetime
+    confirmed_at: datetime | None = None
+    activated_at: datetime | None = None
+
+
+class HealthReportSummaryDTO(BaseModel):
+    id: str
+    archive_id: str
+    title: str
+    status: AsyncJobStatus
+    summary: str
+    generated_at: datetime | None = None
+    pdf_ready: bool
 
 
 class RehabEvidenceSummaryDTO(BaseModel):
@@ -388,6 +495,7 @@ class GenerateRehabGuidanceRequest(BaseModel):
     as_of_date: date
 
 
+DashboardOverviewResponse.model_rebuild()
 MedicalRecordArchiveSummaryDTO.model_rebuild()
 MedicalRecordArchiveDetailDTO.model_rebuild()
 MedicalRecordReportDetailDTO.model_rebuild()

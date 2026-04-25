@@ -8,6 +8,7 @@ import {
   Waves,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { RehabPlanCard } from '../components/rehab-guidance/rehab-plan-card'
 import { RehabPlanStatusBadge } from '../components/rehab-guidance/rehab-plan-status-badge'
 import { PageHeader } from '../components/ui/page-header'
@@ -109,6 +110,7 @@ function describePlanDiff(activePlan: RehabPlan | null, candidatePlan: RehabPlan
 }
 
 export function RehabGuidancePage() {
+  const [searchParams] = useSearchParams()
   const {
     data,
     error,
@@ -119,6 +121,7 @@ export function RehabGuidancePage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
+  const requestedPlanId = searchParams.get('plan_id')
 
   const candidatePlan = data?.candidatePlan ?? null
   const activePlan = data?.activePlan ?? null
@@ -186,7 +189,11 @@ export function RehabGuidancePage() {
     <div className="space-y-6">
       <PageHeader
         title="个性化训练计划"
-        subtitle="基于目标自然日的用药记录与震颤趋势，生成可复核、可确认的辅助性康复训练建议。"
+        subtitle={
+          requestedPlanId
+            ? `正在展示聊天流关联的计划详情（计划 ID: ${requestedPlanId}）。`
+            : '基于目标自然日的用药记录与震颤趋势，生成可复核、可确认的辅助性康复训练建议。'
+        }
         trailing={
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
@@ -243,10 +250,10 @@ export function RehabGuidancePage() {
               </h3>
               <p className="mt-2 text-sm leading-6">
                 {hasConflict
-                  ? '系统仍会生成候选计划，但会保留风险标记并要求你显式确认后才生效。'
+                  ? '系统仍会调用 AI 生成候选计划，但会保留风险标记并要求你显式确认后才生效。'
                   : hasInsufficientData
                     ? '当前页面会明确告知缺失输入项，并在证据补齐前隐藏“生成新计划”操作。'
-                    : '当前页面只提供白名单内的辅助训练建议，所有候选计划都需要你确认后才会激活。'}
+                    : '系统会先基于目标日证据做 AI 结构化分析，再在白名单训练模块内生成候选计划；所有候选计划都需要你确认后才会激活。'}
               </p>
             </div>
           </div>
@@ -255,7 +262,7 @@ export function RehabGuidancePage() {
 
       <SectionPanel
         title="目标日证据摘要"
-        description="V1 固定按 `calendar_day` 聚合目标自然日证据；数据不足时不生成伪计划。"
+        description="固定按 `calendar_day` 聚合目标自然日证据；数据不足时不生成伪计划，数据充足时触发 AI 结构化分析。"
         action={
           canGenerate ? (
             <button

@@ -9,7 +9,13 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.models.clinical import DeviceBinding, DeviceStatusSnapshot, MedicationLog, TremorEvent
-from app.schemas.domain import AiInsightDTO, DeviceStatusDTO, TremorMetricSummaryDTO, TremorTrendPointDTO
+from app.schemas.domain import (
+    AiInsightDTO,
+    DeviceStatusDTO,
+    OverviewEvidenceReadinessDTO,
+    TremorMetricSummaryDTO,
+    TremorTrendPointDTO,
+)
 
 DISPLAY_TZ = ZoneInfo("Asia/Shanghai")
 
@@ -177,3 +183,45 @@ def build_overview_insight(
         )
 
     return AiInsightDTO(id="overview-insight", title="AI 医生摘要洞察", summary=summary)
+
+
+def build_evidence_readiness(
+    *,
+    has_device_binding: bool,
+    events_today: list[TremorEvent],
+    medications: list[MedicationLog],
+    medical_record_archive_count: int,
+) -> OverviewEvidenceReadinessDTO:
+    has_monitoring_events = len(events_today) > 0
+    has_medication_logs = len(medications) > 0
+    has_medical_record_archives = medical_record_archive_count > 0
+
+    ai_interpretation_ready = has_device_binding and (
+        has_monitoring_events or has_medication_logs or has_medical_record_archives
+    )
+    rehab_plan_ready = has_monitoring_events and has_medication_logs
+    health_report_ready = has_monitoring_events or has_medication_logs or has_medical_record_archives
+
+    next_steps: list[str] = []
+    if not has_monitoring_events:
+        next_steps.append("继续佩戴设备采集监测数据")
+    if not has_medication_logs:
+        next_steps.append("补充今日用药记录")
+    if not has_medical_record_archives:
+        next_steps.append("补充病历档案以增强 AI 解读")
+    if not next_steps:
+        next_steps.append("前往 AI 医生解读当前状态")
+
+    return OverviewEvidenceReadinessDTO(
+        has_device_binding=has_device_binding,
+        has_monitoring_events=has_monitoring_events,
+        monitoring_event_count=len(events_today),
+        has_medication_logs=has_medication_logs,
+        medication_log_count=len(medications),
+        has_medical_record_archives=has_medical_record_archives,
+        medical_record_archive_count=medical_record_archive_count,
+        ai_interpretation_ready=ai_interpretation_ready,
+        rehab_plan_ready=rehab_plan_ready,
+        health_report_ready=health_report_ready,
+        next_steps=next_steps,
+    )

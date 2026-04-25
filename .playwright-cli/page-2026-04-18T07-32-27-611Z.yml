@@ -1,0 +1,236 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e10]: tremor-guard-backend/app/services/rehab_guidance.py
+      - generic [ref=e11]: 证据驱动 + 风险判断 + 个性化康复建议
+    - generic [ref=e12]:
+      - complementary [ref=e13]:
+        - generic [ref=e14]: Neuro Pulse
+        - heading "康复计划决策逻辑" [level=1] [ref=e15]
+        - paragraph [ref=e16]: 按目标自然日汇总用药与震颤证据，判断信号是否冲突，再映射到更保守或更积极的训练方案。
+        - generic [ref=e17]:
+          - heading "展示重点" [level=2] [ref=e18]
+          - paragraph [ref=e19]: 保留关键函数和安全边界逻辑，让评委能一眼看出系统不是普通 CRUD，而是围绕监测数据、AI 推理与辅助决策构建的后端能力。
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: tremor-guard-backend/app/services/rehab_guidance.py
+          - generic [ref=e23]: Trae-style code view · 130%
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: "1"
+            - generic [ref=e27]: "def classify_tremor_bucket(events: list[TremorEvent]) -> Literal[\"stable\", \"moderate\", \"elevated\"] | None:"
+          - generic [ref=e28]:
+            - generic [ref=e29]: "2"
+            - generic [ref=e30]: "if not events:"
+          - generic [ref=e31]:
+            - generic [ref=e32]: "3"
+            - generic [ref=e33]: return None
+          - generic [ref=e35]: "4"
+          - generic [ref=e37]:
+            - generic [ref=e38]: "5"
+            - generic [ref=e39]: average_amplitude = mean(event.rms_amplitude for event in events)
+          - generic [ref=e40]:
+            - generic [ref=e41]: "6"
+            - generic [ref=e42]: peak_amplitude = max(event.rms_amplitude for event in events)
+          - generic [ref=e43]:
+            - generic [ref=e44]: "7"
+            - generic [ref=e45]: "if peak_amplitude >= 0.70 or average_amplitude >= 0.45:"
+          - generic [ref=e46]:
+            - generic [ref=e47]: "8"
+            - generic [ref=e48]: return "elevated"
+          - generic [ref=e49]:
+            - generic [ref=e50]: "9"
+            - generic [ref=e51]: "if peak_amplitude >= 0.45 or average_amplitude >= 0.30:"
+          - generic [ref=e52]:
+            - generic [ref=e53]: "10"
+            - generic [ref=e54]: return "moderate"
+          - generic [ref=e55]:
+            - generic [ref=e56]: "11"
+            - generic [ref=e57]: return "stable"
+          - generic [ref=e59]: "12"
+          - generic [ref=e62]: "13"
+          - generic [ref=e64]:
+            - generic [ref=e65]: "14"
+            - generic [ref=e66]: "def derive_medication_signal(logs: list[MedicationLog]) -> Literal[\"adherent\", \"partial\", \"missed\"] | None:"
+          - generic [ref=e67]:
+            - generic [ref=e68]: "15"
+            - generic [ref=e69]: "if not logs:"
+          - generic [ref=e70]:
+            - generic [ref=e71]: "16"
+            - generic [ref=e72]: return None
+          - generic [ref=e74]: "17"
+          - generic [ref=e76]:
+            - generic [ref=e77]: "18"
+            - generic [ref=e78]: "statuses = {log.status for log in logs}"
+          - generic [ref=e79]:
+            - generic [ref=e80]: "19"
+            - generic [ref=e81]: "if \"missed\" in statuses or \"skipped\" in statuses:"
+          - generic [ref=e82]:
+            - generic [ref=e83]: "20"
+            - generic [ref=e84]: return "missed"
+          - generic [ref=e85]:
+            - generic [ref=e86]: "21"
+            - generic [ref=e87]: "if statuses == {\"taken\"}:"
+          - generic [ref=e88]:
+            - generic [ref=e89]: "22"
+            - generic [ref=e90]: return "adherent"
+          - generic [ref=e91]:
+            - generic [ref=e92]: "23"
+            - generic [ref=e93]: return "partial"
+          - generic [ref=e95]: "24"
+          - generic [ref=e98]: "25"
+          - generic [ref=e100]:
+            - generic [ref=e101]: "26"
+            - generic [ref=e102]: def determine_signal_consistency(
+          - generic [ref=e103]:
+            - generic [ref=e104]: "27"
+            - generic [ref=e105]: "medication_signal: Literal[\"adherent\", \"partial\", \"missed\"] | None,"
+          - generic [ref=e106]:
+            - generic [ref=e107]: "28"
+            - generic [ref=e108]: "tremor_bucket: Literal[\"stable\", \"moderate\", \"elevated\"] | None,"
+          - generic [ref=e109]:
+            - generic [ref=e110]: "29"
+            - generic [ref=e111]: ") -> RehabConflictStatus:"
+          - generic [ref=e112]:
+            - generic [ref=e113]: "30"
+            - generic [ref=e114]: "if medication_signal is None or tremor_bucket is None:"
+          - generic [ref=e115]:
+            - generic [ref=e116]: "31"
+            - generic [ref=e117]: return "insufficient_data"
+          - generic [ref=e118]:
+            - generic [ref=e119]: "32"
+            - generic [ref=e120]: "if medication_signal == \"adherent\" and tremor_bucket == \"elevated\":"
+          - generic [ref=e121]:
+            - generic [ref=e122]: "33"
+            - generic [ref=e123]: return "conflicting"
+          - generic [ref=e124]:
+            - generic [ref=e125]: "34"
+            - generic [ref=e126]: "if medication_signal in {\"partial\", \"missed\"} and tremor_bucket == \"stable\":"
+          - generic [ref=e127]:
+            - generic [ref=e128]: "35"
+            - generic [ref=e129]: return "conflicting"
+          - generic [ref=e130]:
+            - generic [ref=e131]: "36"
+            - generic [ref=e132]: return "consistent"
+          - generic [ref=e134]: "37"
+          - generic [ref=e136]:
+            - generic [ref=e137]: "38"
+            - generic [ref=e138]: "def load_rehab_evidence(session: Session, user_id: str, as_of_date: date) -> EvidenceBundle:"
+          - generic [ref=e139]:
+            - generic [ref=e140]: "39"
+            - generic [ref=e141]: start_at, end_at = local_day_bounds(as_of_date)
+          - generic [ref=e142]:
+            - generic [ref=e143]: "40"
+            - generic [ref=e144]: medication_logs = list(
+          - generic [ref=e145]:
+            - generic [ref=e146]: "41"
+            - generic [ref=e147]: session.scalars(
+          - generic [ref=e148]:
+            - generic [ref=e149]: "42"
+            - generic [ref=e150]: select(MedicationLog)
+          - generic [ref=e151]:
+            - generic [ref=e152]: "43"
+            - generic [ref=e153]: .where(
+          - generic [ref=e154]:
+            - generic [ref=e155]: "44"
+            - generic [ref=e156]: MedicationLog.user_id == user_id,
+          - generic [ref=e157]:
+            - generic [ref=e158]: "45"
+            - generic [ref=e159]: MedicationLog.taken_at >= start_at,
+          - generic [ref=e160]:
+            - generic [ref=e161]: "46"
+            - generic [ref=e162]: MedicationLog.taken_at < end_at,
+          - generic [ref=e163]:
+            - generic [ref=e164]: "47"
+            - generic [ref=e165]: )
+          - generic [ref=e166]:
+            - generic [ref=e167]: "48"
+            - generic [ref=e168]: .order_by(MedicationLog.taken_at)
+          - generic [ref=e169]:
+            - generic [ref=e170]: "49"
+            - generic [ref=e171]: )
+          - generic [ref=e172]:
+            - generic [ref=e173]: "50"
+            - generic [ref=e174]: )
+          - generic [ref=e175]:
+            - generic [ref=e176]: "51"
+            - generic [ref=e177]: tremor_events = list(
+          - generic [ref=e178]:
+            - generic [ref=e179]: "52"
+            - generic [ref=e180]: session.scalars(
+          - generic [ref=e181]:
+            - generic [ref=e182]: "53"
+            - generic [ref=e183]: select(TremorEvent)
+          - generic [ref=e184]:
+            - generic [ref=e185]: "54"
+            - generic [ref=e186]: .where(
+          - generic [ref=e187]:
+            - generic [ref=e188]: "55"
+            - generic [ref=e189]: TremorEvent.user_id == user_id,
+          - generic [ref=e190]:
+            - generic [ref=e191]: "56"
+            - generic [ref=e192]: TremorEvent.start_at >= start_at,
+          - generic [ref=e193]:
+            - generic [ref=e194]: "57"
+            - generic [ref=e195]: TremorEvent.start_at < end_at,
+          - generic [ref=e196]:
+            - generic [ref=e197]: "58"
+            - generic [ref=e198]: )
+          - generic [ref=e199]:
+            - generic [ref=e200]: "59"
+            - generic [ref=e201]: .order_by(TremorEvent.start_at)
+          - generic [ref=e202]:
+            - generic [ref=e203]: "60"
+            - generic [ref=e204]: )
+          - generic [ref=e205]:
+            - generic [ref=e206]: "61"
+            - generic [ref=e207]: )
+          - generic [ref=e208]:
+            - generic [ref=e209]: "62"
+            - generic [ref=e210]: medication_signal = derive_medication_signal(medication_logs)
+          - generic [ref=e211]:
+            - generic [ref=e212]: "63"
+            - generic [ref=e213]: tremor_bucket = classify_tremor_bucket(tremor_events)
+          - generic [ref=e214]:
+            - generic [ref=e215]: "64"
+            - generic [ref=e216]: signal_consistency = determine_signal_consistency(medication_signal, tremor_bucket)
+          - generic [ref=e217]:
+            - generic [ref=e218]: "65"
+            - generic [ref=e219]: "if signal_consistency == \"conflicting\":"
+          - generic [ref=e220]:
+            - generic [ref=e221]: "66"
+            - generic [ref=e222]: explanation = "用药记录与震颤强度信号存在张力，系统会保留风险提示并给出更保守的训练建议。"
+          - generic [ref=e224]: "67"
+          - generic [ref=e226]:
+            - generic [ref=e227]: "68"
+            - generic [ref=e228]: def determine_scenario_key(
+          - generic [ref=e229]:
+            - generic [ref=e230]: "69"
+            - generic [ref=e231]: "tremor_bucket: Literal[\"stable\", \"moderate\", \"elevated\"] | None,"
+          - generic [ref=e232]:
+            - generic [ref=e233]: "70"
+            - generic [ref=e234]: "signal_consistency: RehabConflictStatus,"
+          - generic [ref=e235]:
+            - generic [ref=e236]: "71"
+            - generic [ref=e237]: ") -> str:"
+          - generic [ref=e238]:
+            - generic [ref=e239]: "72"
+            - generic [ref=e240]: "if signal_consistency == \"conflicting\":"
+          - generic [ref=e241]:
+            - generic [ref=e242]: "73"
+            - generic [ref=e243]: return "moderate_adjustment"
+          - generic [ref=e244]:
+            - generic [ref=e245]: "74"
+            - generic [ref=e246]: "if tremor_bucket == \"elevated\":"
+          - generic [ref=e247]:
+            - generic [ref=e248]: "75"
+            - generic [ref=e249]: return "high_support"
+          - generic [ref=e250]:
+            - generic [ref=e251]: "76"
+            - generic [ref=e252]: "if tremor_bucket == \"moderate\":"
+          - generic [ref=e253]:
+            - generic [ref=e254]: "77"
+            - generic [ref=e255]: return "moderate_adjustment"
+          - generic [ref=e256]:
+            - generic [ref=e257]: "78"
+            - generic [ref=e258]: return "stable_support"

@@ -1,8 +1,8 @@
 import { Download, FileText } from 'lucide-react'
-import type { ReportSummary } from '../../types/domain'
+import type { LegacyMonitoringReportSummary } from '../../types/domain'
 
 interface ReportListItemProps {
-  report: ReportSummary
+  report: LegacyMonitoringReportSummary
 }
 
 export function ReportListItem({ report }: ReportListItemProps) {

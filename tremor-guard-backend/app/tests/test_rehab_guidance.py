@@ -1,9 +1,11 @@
 from datetime import datetime
 
+from pydantic import SecretStr
 from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.models.clinical import ApiAuditLog, MedicationLog, RehabPlan
+import app.services.rehab_guidance as rehab_guidance_service
 from app.services.rehab_guidance import determine_signal_consistency, local_day_bounds
 
 
@@ -28,6 +30,37 @@ def register(client, email: str, display_name: str = "康复患者"):
 
 def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+def mock_rehab_analysis(monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", SecretStr("test-dashscope-key"))
+
+    def fake_generate_structured_rehab_plan(*, evidence_bundle, current_active, scenario_key, templates):
+        selected_keys = [template.template_key for template in templates[:2]]
+        return {
+            "title": f"{scenario_key}-ai-plan",
+            "rationale": f"{evidence_bundle.summary.explanation} AI 已基于目标日证据生成候选方案。",
+            "difference_summary": None,
+            "recommended_template_keys": selected_keys,
+            "item_overrides": {
+                selected_keys[0]: {
+                    "goal": "帮助今天先建立更稳定的训练节奏。",
+                    "preparation": ["选择稳定坐姿，先确认周围无障碍物。"],
+                    "steps": ["先做低强度启动动作，再按页面节奏完成训练。"],
+                    "completion_check": "训练后没有明显不适，动作节奏保持稳定。",
+                    "additional_cautions": ["若出现明显疲劳，请立即停止并休息。"],
+                }
+            },
+            "model_name": "qwen-plus",
+            "prompt_version": "rehab-guidance-v1",
+        }
+
+    monkeypatch.setattr(
+        rehab_guidance_service,
+        "_generate_structured_rehab_plan",
+        fake_generate_structured_rehab_plan,
+    )
 
 
 def test_local_day_bounds_uses_calendar_day_in_shanghai_timezone():
@@ -63,11 +96,14 @@ def test_rehab_guidance_get_returns_active_plan_and_generation_eligibility(clien
     assert body["evidence_summary"]["generation_eligibility"] == "eligible"
     assert body["evidence_summary"]["missing_inputs"] == []
     assert body["active_plan"]["status"] == "active_only"
+    assert body["active_plan"]["items"][0]["steps"]
+    assert body["active_plan"]["items"][0]["preparation"]
     assert body["candidate_plan"] is None
     assert "药物调整" in body["disclaimer"]
 
 
-def test_rehab_guidance_generate_and_confirm_flow(client, clinical_session_factory):
+def test_rehab_guidance_generate_and_confirm_flow(client, clinical_session_factory, monkeypatch):
+    mock_rehab_analysis(monkeypatch)
     session = login(client)
     headers = auth_headers(session["access_token"])
 
@@ -84,6 +120,9 @@ def test_rehab_guidance_generate_and_confirm_flow(client, clinical_session_facto
     assert candidate_plan["version"] == 2
     assert len(candidate_plan["items"]) >= 2
     assert all(item["template_id"] for item in candidate_plan["items"])
+    assert all(item["steps"] for item in candidate_plan["items"])
+    assert candidate_plan["title"] == "moderate_adjustment-ai-plan"
+    assert "AI 已基于目标日证据生成候选方案" in candidate_plan["rationale"]
 
     with clinical_session_factory() as db_session:
         generate_log = db_session.scalar(
@@ -91,8 +130,11 @@ def test_rehab_guidance_generate_and_confirm_flow(client, clinical_session_facto
             .where(ApiAuditLog.action == "generate_rehab_guidance")
             .order_by(ApiAuditLog.created_at.desc())
         )
+        persisted_plan = db_session.scalar(select(RehabPlan).where(RehabPlan.id == candidate_plan["id"]))
         assert generate_log is not None
         assert generate_log.response_summary["plan_id"] == candidate_plan["id"]
+        assert persisted_plan is not None
+        assert persisted_plan.evidence_snapshot["analysis"]["model_name"] == "qwen-plus"
 
     confirm_response = client.post(
         f"/v1/rehab-guidance/{candidate_plan['id']}/confirm",
@@ -118,7 +160,8 @@ def test_rehab_guidance_generate_and_confirm_flow(client, clinical_session_facto
         assert active_plan.is_current_active is True
 
 
-def test_rehab_guidance_generate_marks_previous_candidate_superseded(client, clinical_session_factory):
+def test_rehab_guidance_generate_marks_previous_candidate_superseded(client, clinical_session_factory, monkeypatch):
+    mock_rehab_analysis(monkeypatch)
     session = login(client)
     headers = auth_headers(session["access_token"])
 
@@ -149,7 +192,8 @@ def test_rehab_guidance_generate_marks_previous_candidate_superseded(client, cli
         assert latest_candidate.status == "candidate_pending_confirmation"
 
 
-def test_rehab_guidance_generate_flags_conflicts(client, clinical_session_factory):
+def test_rehab_guidance_generate_flags_conflicts(client, clinical_session_factory, monkeypatch):
+    mock_rehab_analysis(monkeypatch)
     session = login(client)
     headers = auth_headers(session["access_token"])
 
@@ -205,7 +249,8 @@ def test_rehab_guidance_insufficient_data_returns_empty_state_and_blocks_generat
     assert generate_response.json()["detail"]["code"] == "insufficient_data"
 
 
-def test_rehab_guidance_non_owner_cannot_confirm_other_users_plan(client):
+def test_rehab_guidance_non_owner_cannot_confirm_other_users_plan(client, monkeypatch):
+    mock_rehab_analysis(monkeypatch)
     demo_session = login(client)
     demo_headers = auth_headers(demo_session["access_token"])
     generate_response = client.post(
@@ -221,3 +266,18 @@ def test_rehab_guidance_non_owner_cannot_confirm_other_users_plan(client):
     confirm_response = client.post(f"/v1/rehab-guidance/{candidate_id}/confirm", headers=other_headers)
 
     assert confirm_response.status_code == 404
+
+
+def test_rehab_guidance_generate_requires_dashscope_api_key(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", None)
+
+    session = login(client)
+    response = client.post(
+        "/v1/rehab-guidance/generate",
+        json={"as_of_date": "2026-04-05"},
+        headers=auth_headers(session["access_token"]),
+    )
+
+    assert response.status_code == 503
+    assert "DASHSCOPE_API_KEY" in response.json()["detail"]

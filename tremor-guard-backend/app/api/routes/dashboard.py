@@ -1,12 +1,13 @@
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import ClinicalSessionDep, CurrentUserDep
-from app.models.clinical import MedicationLog, TremorEvent
+from app.models.clinical import MedicalRecordArchive, MedicationLog, TremorEvent
 from app.schemas.domain import DashboardOverviewResponse
 from app.services.dashboard import (
+    build_evidence_readiness,
     build_metric_summaries,
     build_overview_insight,
     build_trend_points,
@@ -55,6 +56,12 @@ def get_overview(
         )
     )
     device_binding, snapshot = get_latest_device_status(clinical_session, current_user.id)
+    archive_count = int(
+        clinical_session.scalar(
+            select(func.count(MedicalRecordArchive.id)).where(MedicalRecordArchive.user_id == current_user.id)
+        )
+        or 0
+    )
 
     trend_points = build_trend_points(events_today, medications, target_date)
     return DashboardOverviewResponse(
@@ -62,4 +69,10 @@ def get_overview(
         device_status=format_device_status(device_binding, snapshot),
         trend_points=trend_points,
         overview_insight=build_overview_insight(trend_points, medications),
+        evidence_readiness=build_evidence_readiness(
+            has_device_binding=device_binding is not None,
+            events_today=events_today,
+            medications=medications,
+            medical_record_archive_count=archive_count,
+        ),
     )
