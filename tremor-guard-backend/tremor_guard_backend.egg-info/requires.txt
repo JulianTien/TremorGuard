@@ -8,6 +8,7 @@ python-multipart<1.0.0,>=0.0.20
 sqlalchemy<3.0.0,>=2.0.41
 passlib[bcrypt]<2.0.0,>=1.7.4
 psycopg[binary]<4.0.0,>=3.2.9
+weasyprint<67.0,>=66.0
 uvicorn[standard]<1.0.0,>=0.35.0
 
 [dev]

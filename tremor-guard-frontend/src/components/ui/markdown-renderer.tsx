@@ -23,36 +23,48 @@ export function MarkdownRenderer({
       ? {
           body: 'text-white',
           strong: 'text-white',
-          blockquote: 'border-l-white/40 text-white/85',
+          headingRule: 'border-white/20',
+          headingAccent: 'border-white/35 bg-white/10 text-white',
+          blockquote: 'border-l-white/40 bg-white/10 text-white/85',
           inlineCode: 'bg-white/10 text-white',
           codeBlock: 'border border-white/10 bg-slate-950/60 text-white',
           hr: 'border-white/15',
           link: 'text-white underline underline-offset-4',
           tableHead: 'bg-white/10',
           tableCell: 'border-t border-white/10',
+          tableRow: 'even:bg-white/5',
+          tableBorder: 'border-white/10',
         }
       : tone === 'muted'
         ? {
             body: 'text-slate-600',
             strong: 'text-slate-900',
-            blockquote: 'border-l-slate-300 text-slate-600',
+            headingRule: 'border-teal-100',
+            headingAccent: 'border-teal-600 bg-teal-50 text-slate-900',
+            blockquote: 'border-l-teal-500 bg-teal-50 text-slate-700',
             inlineCode: 'bg-slate-200 text-slate-900',
             codeBlock: 'border border-slate-200 bg-slate-900 text-slate-100',
             hr: 'border-slate-200',
             link: 'text-teal-700 underline underline-offset-4',
             tableHead: 'bg-slate-100',
             tableCell: 'border-t border-slate-200',
+            tableRow: 'even:bg-slate-50',
+            tableBorder: 'border-slate-200',
           }
         : {
             body: 'text-slate-700',
             strong: 'text-slate-900',
-            blockquote: 'border-l-slate-300 text-slate-600',
+            headingRule: 'border-teal-100',
+            headingAccent: 'border-teal-600 bg-teal-50 text-slate-900',
+            blockquote: 'border-l-teal-500 bg-teal-50 text-slate-700',
             inlineCode: 'bg-slate-100 text-slate-900',
             codeBlock: 'border border-slate-200 bg-slate-900 text-slate-100',
             hr: 'border-slate-200',
             link: 'text-teal-700 underline underline-offset-4',
             tableHead: 'bg-slate-100',
             tableCell: 'border-t border-slate-200',
+            tableRow: 'even:bg-slate-50',
+            tableBorder: 'border-slate-200',
           }
 
   return (
@@ -60,9 +72,32 @@ export function MarkdownRenderer({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: ({ children }) => <h1 className={joinClasses('mt-5 text-lg font-semibold', palette.strong)}>{children}</h1>,
-          h2: ({ children }) => <h2 className={joinClasses('mt-5 text-base font-semibold', palette.strong)}>{children}</h2>,
-          h3: ({ children }) => <h3 className={joinClasses('mt-4 text-sm font-semibold', palette.strong)}>{children}</h3>,
+          h1: ({ children }) => (
+            <h1
+              className={joinClasses(
+                'mt-6 border-b pb-3 text-xl font-semibold leading-tight',
+                palette.strong,
+                palette.headingRule,
+              )}
+            >
+              {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2
+              className={joinClasses(
+                'mt-6 rounded-sm border-l-4 px-3 py-2 text-base font-semibold leading-tight',
+                palette.headingAccent,
+              )}
+            >
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className={joinClasses('mt-5 text-sm font-semibold leading-tight', palette.strong)}>
+              {children}
+            </h3>
+          ),
           h4: ({ children }) => <h4 className={joinClasses('mt-4 text-sm font-medium', palette.strong)}>{children}</h4>,
           p: ({ children }) => <p className="my-3 whitespace-pre-wrap">{children}</p>,
           ul: ({ children }) => <ul className="my-3 list-disc space-y-2 pl-5">{children}</ul>,
@@ -72,7 +107,7 @@ export function MarkdownRenderer({
           em: ({ children }) => <em className="italic">{children}</em>,
           hr: () => <hr className={joinClasses('my-4 border-t', palette.hr)} />,
           blockquote: ({ children }) => (
-            <blockquote className={joinClasses('my-4 border-l-4 pl-4 italic', palette.blockquote)}>
+            <blockquote className={joinClasses('my-4 rounded-r-md border-l-4 px-4 py-3', palette.blockquote)}>
               {children}
             </blockquote>
           ),
@@ -108,9 +143,14 @@ export function MarkdownRenderer({
               </code>
             )
           },
-          table: ({ children }) => <table className="my-4 w-full border-collapse text-left">{children}</table>,
+          table: ({ children }) => (
+            <div className={joinClasses('my-4 overflow-x-auto rounded-md border', palette.tableBorder)}>
+              <table className="w-full min-w-[560px] border-collapse text-left">{children}</table>
+            </div>
+          ),
           thead: ({ children }) => <thead className={palette.tableHead}>{children}</thead>,
           th: ({ children }) => <th className="px-3 py-2 text-xs font-semibold">{children}</th>,
+          tr: ({ children }) => <tr className={palette.tableRow}>{children}</tr>,
           td: ({ children }) => <td className={joinClasses('px-3 py-2 align-top', palette.tableCell)}>{children}</td>,
         }}
       >

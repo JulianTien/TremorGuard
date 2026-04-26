@@ -67,6 +67,13 @@ export function OnboardingGuard({
     return <Navigate to="/overview" replace />
   }
 
+  if (
+    requiredState === 'profile_required' &&
+    currentUser.onboardingState === 'device_binding_required'
+  ) {
+    return children
+  }
+
   if (currentUser.onboardingState !== requiredState) {
     return <Navigate to={resolveAuthenticatedPath(currentUser)} replace />
   }

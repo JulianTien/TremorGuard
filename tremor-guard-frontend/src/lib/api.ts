@@ -49,6 +49,7 @@ function resolveApiBaseUrl() {
 
 const API_BASE_URL = resolveApiBaseUrl()
 const SESSION_KEY = 'tremor-guard-session'
+const REQUEST_TIMEOUT_MS = 15000
 export const AUTH_EVENT = 'tremor-guard-auth-changed'
 export const DEFAULT_DATA_DATE = '2026-04-05'
 
@@ -884,6 +885,27 @@ function buildRequestHeaders(headers?: HeadersInit, includeJson = false): Header
   return requestHeaders
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => {
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS)
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError(408, '请求超时，请确认后端服务正在运行后重试。')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 function sanitizeDownloadFileNameSegment(value?: string | null) {
   return (value ?? '')
     .normalize('NFKC')
@@ -939,8 +961,14 @@ function notifyAuthChanged() {
   }
 }
 
+function getSessionStorage() {
+  return window.sessionStorage
+}
+
 export function loadStoredSession(): AuthSession | null {
-  const raw = localStorage.getItem(SESSION_KEY)
+  localStorage.removeItem(SESSION_KEY)
+
+  const raw = getSessionStorage().getItem(SESSION_KEY)
   if (!raw) {
     return null
   }
@@ -948,18 +976,20 @@ export function loadStoredSession(): AuthSession | null {
   try {
     return JSON.parse(raw) as AuthSession
   } catch {
-    localStorage.removeItem(SESSION_KEY)
+    getSessionStorage().removeItem(SESSION_KEY)
     return null
   }
 }
 
 function storeSession(session: AuthSession) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  localStorage.removeItem(SESSION_KEY)
+  getSessionStorage().setItem(SESSION_KEY, JSON.stringify(session))
   notifyAuthChanged()
 }
 
 export function clearStoredSession() {
   localStorage.removeItem(SESSION_KEY)
+  getSessionStorage().removeItem(SESSION_KEY)
   notifyAuthChanged()
 }
 
@@ -980,7 +1010,7 @@ function persistAuthResponse(payload: BackendAuthResponse): AuthResult {
 }
 
 async function postAuth(path: string, body: Record<string, unknown>): Promise<AuthResult> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: buildRequestHeaders(undefined, true),
     body: JSON.stringify(body),
@@ -1007,7 +1037,7 @@ export async function refreshStoredSession(): Promise<AuthResult | null> {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/auth/refresh`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/v1/auth/refresh`, {
       method: 'POST',
       headers: buildRequestHeaders(undefined, true),
       body: JSON.stringify({ refresh_token: session.refreshToken }),
@@ -1029,7 +1059,7 @@ export async function logoutUser(refreshToken?: string) {
   }
 
   try {
-    await fetch(`${API_BASE_URL}/v1/auth/logout`, {
+    await fetchWithTimeout(`${API_BASE_URL}/v1/auth/logout`, {
       method: 'POST',
       headers: buildRequestHeaders(undefined, true),
       body: JSON.stringify({ refresh_token: token }),
@@ -1049,7 +1079,7 @@ async function authenticatedFetch(path: string, init?: RequestInit, retry = true
   const headers = buildRequestHeaders(init?.headers, includeJson)
   headers.set('Authorization', `Bearer ${session.accessToken}`)
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     ...init,
     headers,
   })

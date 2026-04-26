@@ -6,6 +6,7 @@ from app.core.config import get_settings
 from app.services import ai_chat as ai_chat_service
 from app.services import medical_records as medical_records_service
 from app.services import rehab_guidance as rehab_guidance_service
+from app.services.report_agent import ReportAgentGeneration
 
 
 def login(client):
@@ -52,6 +53,165 @@ def _mock_rehab_guidance_analysis(monkeypatch):
         "_generate_structured_rehab_plan",
         fake_generate_structured_rehab_plan,
     )
+
+
+def _mock_health_report_agent(monkeypatch):
+    def fake_generate(*, context):
+        patient = context["display_patient_profile"]
+        monitoring = context["monitoring_summary"]
+        medication = context["medication_summary"]
+        document_summaries = context.get("document_summaries") or []
+        analytics = context["analytics_summary_text"]
+        history_line = (
+            str(document_summaries[0].get("summary_text"))
+            if document_summaries
+            else "本次报告未纳入历史病历资料，仅基于监测与用药记录生成。"
+        )
+        return ReportAgentGeneration(
+            markdown="\n".join(
+                [
+                    "# 帕金森患者健康分析报告",
+                    "",
+                    "## 1. 基本信息",
+                    f"姓名：{patient['name']}",
+                    f"年龄：{patient['age']}",
+                    f"性别：{patient['gender']}",
+                    "",
+                    "## 2. 评估目的",
+                    "用于辅助健康管理与复诊沟通。",
+                    "",
+                    "## 3. 本次监测亮点与异常提示",
+                    analytics,
+                    "",
+                    "| 指标 | 数值 |",
+                    "| --- | ---: |",
+                    f"| 累计震颤事件 | {monitoring['event_count']} |",
+                    f"| 用药记录 | {medication['count']} |",
+                    "",
+                    "## 4. 主诉与现病史",
+                    f"近期监测窗口内累计记录 {monitoring['event_count']} 次震颤事件，平均幅度 {monitoring['avg_amplitude']}，峰值 {monitoring['max_amplitude']}。",
+                    "",
+                    "## 5. 既往史、家族史及生活方式",
+                    history_line,
+                    "",
+                    "## 6. 当前治疗与用药情况",
+                    f"用药窗口内共记录 {medication['count']} 条用药记录，当前记录依从率约 67%，建议复诊时结合记录沟通。",
+                    "",
+                    "## 7. 用药-症状关联分析",
+                    "当前按服药时间窗整理症状数据，仅作为复诊沟通线索，不能单独判断疗效。",
+                    "",
+                    "## 8. 运动症状评估",
+                    f"最近监测窗口内存在 {monitoring['event_count']} 次震颤事件，峰值幅度 {monitoring['max_amplitude']}。",
+                    "",
+                    "## 9. 非运动症状评估",
+                    "当前未采集非运动症状问卷，建议补充睡眠、情绪、便秘和认知观察。",
+                    "",
+                    "## 10. 日常生活能力评估",
+                    "当前未采集日常生活能力量表，建议补充跌倒风险和生活协助记录。",
+                    "",
+                    "## 11. 体格检查",
+                    "当前未纳入线下查体结果，需结合面诊评估。",
+                    "",
+                    "## 12. 辅助检查结果",
+                    "缺少影像检查原文。",
+                    "",
+                    "## 13. 量表评分与疾病分期",
+                    "当前未采集标准化量表评分，且本系统不提供疾病分期结论。",
+                    "",
+                    "## 14. 主要健康问题总结",
+                    "结合历史病例与近期 TremorGuard 监测，当前更适合围绕症状波动与复诊准备做连续观察。",
+                    "",
+                    "## 15. 综合分析",
+                    "需结合线下复诊进一步综合评估。",
+                    "",
+                    "## 16. 干预建议",
+                    "继续记录午后症状波动。",
+                    "",
+                    "## 17. 复诊准备清单",
+                    "- 携带本报告和既往病历。",
+                    "",
+                    "## 18. 症状自评问卷",
+                    "- 记录震颤最明显时段和服药后变化。",
+                    "",
+                    "## 19. 知识科普卡片",
+                    "剂末现象仅作为复诊沟通概念，不由本报告单独判断。",
+                    "",
+                    "## 20. 随访计划",
+                    "复诊时重点沟通午后震颤波动与既往病历中的症状描述是否一致。",
+                    "",
+                    "## 21. 结论",
+                    "本报告用于辅助健康管理与复诊沟通，不替代医生诊断。",
+                ]
+            ),
+            model_name="qwen-plus",
+            rendered_user_prompt="mocked report prompt",
+        )
+
+    monkeypatch.setattr(medical_records_service.HEALTH_REPORT_AGENT, "generate", fake_generate)
+
+
+def _mock_bad_health_report_agent(monkeypatch):
+    def fake_generate(*, context):
+        del context
+        return ReportAgentGeneration(
+            markdown="\n".join(
+                [
+                    "# 帕金森患者健康分析报告",
+                    "",
+                    "## 1. 基本信息",
+                    "- 姓名：当前用户",
+                    "",
+                    "## 2. 评估目的",
+                    "用于辅助健康管理与复诊沟通。",
+                    "",
+                    "## 3. 主诉与现病史",
+                    "近期监测窗口内累计记录 0 次震颤事件，平均幅度 0，峰值 0。",
+                    "",
+                    "## 4. 既往史、家族史及生活方式",
+                    "数据不足/待补充。",
+                    "",
+                    "## 5. 当前治疗与用药情况",
+                    "- 用药窗口内共记录 0 条用药记录。",
+                    "",
+                    "## 6. 运动症状评估",
+                    "- 监测窗口内累计记录 0 次震颤事件。",
+                    "",
+                    "## 7. 非运动症状评估",
+                    "数据不足/待补充。",
+                    "",
+                    "## 8. 日常生活能力评估",
+                    "数据不足/待补充。",
+                    "",
+                    "## 9. 体格检查",
+                    "数据不足/待补充。",
+                    "",
+                    "## 10. 辅助检查结果",
+                    "数据不足/待补充。",
+                    "",
+                    "## 11. 量表评分与疾病分期",
+                    "当前未采集标准化量表评分，且本系统不提供疾病分期结论。",
+                    "",
+                    "## 12. 主要健康问题总结",
+                    "数据不足/待补充。",
+                    "",
+                    "## 13. 综合分析",
+                    "数据不足/待补充。",
+                    "",
+                    "## 14. 干预建议",
+                    "建议继续记录。",
+                    "",
+                    "## 15. 随访计划",
+                    "建议复诊沟通。",
+                    "",
+                    "## 16. 结论",
+                    "本报告用于辅助健康管理与复诊沟通，不替代医生诊断。",
+                ]
+            ),
+            model_name="qwen-plus",
+            rendered_user_prompt="mocked bad report prompt",
+        )
+
+    monkeypatch.setattr(medical_records_service.HEALTH_REPORT_AGENT, "generate", fake_generate)
 
 
 def test_register_onboarding_and_device_binding_flow(client):
@@ -437,15 +597,17 @@ def test_ai_chat_returns_rehab_and_health_report_action_cards(client, monkeypatc
         def json():
             return {
                 "model": "qwen-plus",
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": "我已经根据近期多维数据为您整理了康复训练候选计划和 AI 健康报告。",
+                "output": {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "我已经根据近期多维数据为您整理了康复训练候选计划和 AI 健康报告。",
+                            }
                         }
-                    }
-                ],
-                "usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160},
+                    ]
+                },
+                "usage": {"input_tokens": 120, "output_tokens": 40, "total_tokens": 160},
             }
 
     monkeypatch.setattr(ai_chat_service.httpx, "post", lambda *args, **kwargs: FakeResponse())
@@ -476,6 +638,7 @@ def test_ai_chat_returns_rehab_and_health_report_action_cards(client, monkeypatc
 
 def test_ai_action_endpoints_confirm_rehab_plan_and_generate_health_report_pdf(client, monkeypatch):
     _mock_rehab_guidance_analysis(monkeypatch)
+    _mock_health_report_agent(monkeypatch)
     payload = login(client)
     headers = auth_headers(payload["access_token"])
 
@@ -492,7 +655,7 @@ def test_ai_action_endpoints_confirm_rehab_plan_and_generate_health_report_pdf(c
     rehab_pdf = client.get(f"/v1/ai/actions/rehab-plan/{plan_id}/pdf", headers=headers)
     assert rehab_pdf.status_code == 200
     assert rehab_pdf.headers["content-type"] == "application/pdf"
-    assert rehab_pdf.content.startswith(b"%PDF-1.4")
+    assert rehab_pdf.content.startswith(b"%PDF-")
 
     report_generate = client.post("/v1/ai/actions/health-report/generate", headers=headers)
     assert report_generate.status_code == 200
@@ -508,7 +671,228 @@ def test_ai_action_endpoints_confirm_rehab_plan_and_generate_health_report_pdf(c
     report_pdf = client.get(f"/v1/ai/actions/health-report/{report_id}/pdf", headers=headers)
     assert report_pdf.status_code == 200
     assert report_pdf.headers["content-type"] == "application/pdf"
-    assert report_pdf.content.startswith(b"%PDF-1.4")
+    assert report_pdf.content.startswith(b"%PDF-")
+
+
+def test_ai_health_report_without_extractions_uses_agent_when_configured(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", SecretStr("test-dashscope-key"))
+    captured_context = {}
+
+    def fake_generate(*, context):
+        captured_context.update(context)
+        patient = context["display_patient_profile"]
+        monitoring = context["monitoring_summary"]
+        medication = context["medication_summary"]
+        return ReportAgentGeneration(
+            markdown="\n".join(
+                [
+                    "# 帕金森患者健康分析报告",
+                    "",
+                    "## 1. 基本信息",
+                    f"- 姓名：{patient['name']}",
+                    f"- 年龄：{patient['age']}",
+                    "",
+                    "## 2. 评估目的",
+                    "用于辅助健康管理与复诊沟通。",
+                    "",
+                    "## 3. 本次监测亮点与异常提示",
+                    context["analytics_summary_text"],
+                    "",
+                    "| 指标 | 数值 |",
+                    "| --- | ---: |",
+                    f"| 累计震颤事件 | {monitoring['event_count']} |",
+                    f"| 用药记录 | {medication['count']} |",
+                    "",
+                    "## 4. 主诉与现病史",
+                    f"近期监测窗口内累计记录 {monitoring['event_count']} 次震颤事件，平均幅度 {monitoring['avg_amplitude']}，峰值 {monitoring['max_amplitude']}。",
+                    "",
+                    "## 5. 既往史、家族史及生活方式",
+                    "本次报告未纳入历史病历资料，仅基于监测与用药记录生成。",
+                    "",
+                    "## 6. 当前治疗与用药情况",
+                    f"用药窗口内共记录 {medication['count']} 条用药记录，依从率约 67%。",
+                    "",
+                    "## 7. 用药-症状关联分析",
+                    "当前按服药时间窗整理症状数据，仅作为复诊沟通线索。",
+                    "",
+                    "## 8. 运动症状评估",
+                    f"监测窗口内累计记录 {monitoring['event_count']} 次震颤事件。",
+                    "",
+                    "## 9. 非运动症状评估",
+                    "当前未采集非运动症状问卷，建议补充观察。",
+                    "",
+                    "## 10. 日常生活能力评估",
+                    "当前未采集日常生活能力量表，建议补充观察。",
+                    "",
+                    "## 11. 体格检查",
+                    "当前未纳入线下查体结果。",
+                    "",
+                    "## 12. 辅助检查结果",
+                    "建议补充既往检查原文。",
+                    "",
+                    "## 13. 量表评分与疾病分期",
+                    "当前未采集标准化量表评分，且本系统不提供疾病分期结论。",
+                    "",
+                    "## 14. 主要健康问题总结",
+                    "当前更适合围绕症状波动与复诊准备做连续观察。",
+                    "",
+                    "## 15. 综合分析",
+                    "需结合线下复诊进一步综合评估。",
+                    "",
+                    "## 16. 干预建议",
+                    "继续记录午后症状波动。",
+                    "",
+                    "## 17. 复诊准备清单",
+                    "- 携带本报告和用药清单。",
+                    "",
+                    "## 18. 症状自评问卷",
+                    "- 记录震颤最明显时段。",
+                    "",
+                    "## 19. 知识科普卡片",
+                    "剂末现象仅作为复诊沟通概念。",
+                    "",
+                    "## 20. 随访计划",
+                    "复诊时重点沟通午后震颤波动。",
+                    "",
+                    "## 21. 结论",
+                    "本报告用于辅助健康管理与复诊沟通，不替代医生诊断。",
+                ]
+            ),
+            model_name="qwen-plus",
+            rendered_user_prompt="mocked report prompt",
+        )
+
+    monkeypatch.setattr(medical_records_service.HEALTH_REPORT_AGENT, "generate", fake_generate)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    report_generate = client.post("/v1/ai/actions/health-report/generate", headers=headers)
+    assert report_generate.status_code == 200
+    report_id = report_generate.json()["action_cards"][0]["resource_id"]
+
+    report_detail = client.get(f"/v1/medical-records/reports/{report_id}", headers=headers)
+    assert report_detail.status_code == 200
+    body = report_detail.json()
+    assert body["model_name"] == "qwen-plus"
+    assert captured_context["patient_profile"]["name"] == "张建国"
+    assert captured_context["display_patient_profile"]["name"] == "张**"
+    assert captured_context["monitoring_summary"]["event_count"] == 22
+    assert captured_context["medication_summary"]["count"] == 3
+    assert "张**" in body["report_markdown"]
+    assert "张建国" not in body["report_markdown"]
+    assert "22 次震颤事件" in body["report_markdown"]
+    assert "3 条用药记录" in body["report_markdown"]
+    assert "本次监测亮点与异常提示" in body["report_markdown"]
+
+
+def test_ai_health_report_without_api_key_fallback_keeps_real_data(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", None)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    report_generate = client.post("/v1/ai/actions/health-report/generate", headers=headers)
+    assert report_generate.status_code == 200
+    report_id = report_generate.json()["action_cards"][0]["resource_id"]
+
+    report_detail = client.get(f"/v1/medical-records/reports/{report_id}", headers=headers)
+    assert report_detail.status_code == 200
+    body = report_detail.json()
+    assert body["model_name"] == "tremorguard-lightweight-template"
+    assert body["input_snapshot"]["patient_profile"]["name"] == "张建国"
+    assert body["input_snapshot"]["display_patient_profile"]["name"] == "张**"
+    assert body["input_snapshot"]["monitoring_summary"]["event_count"] == 22
+    assert body["input_snapshot"]["medication_summary"]["count"] == 3
+    assert "姓名：张**" in body["report_markdown"]
+    assert "张建国" not in body["report_markdown"]
+    assert "累计记录 22 次震颤事件" in body["report_markdown"]
+    assert "用药窗口内共记录 3 条用药记录" in body["report_markdown"]
+    assert "依从率" in body["report_markdown"]
+    assert "复诊准备清单" in body["report_markdown"]
+    assert "姓名：当前用户" not in body["report_markdown"]
+    assert "累计记录 0 次震颤事件" not in body["report_markdown"]
+
+
+def test_ai_health_report_can_disable_identifier_masking(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", None)
+    monkeypatch.setattr(settings, "health_report_mask_identifiers", False)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    report_generate = client.post("/v1/ai/actions/health-report/generate", headers=headers)
+    assert report_generate.status_code == 200
+    report_id = report_generate.json()["action_cards"][0]["resource_id"]
+
+    report_detail = client.get(f"/v1/medical-records/reports/{report_id}", headers=headers)
+    assert report_detail.status_code == 200
+    body = report_detail.json()
+    assert body["input_snapshot"]["display_patient_profile"]["name"] == "张建国"
+    assert "姓名：张建国" in body["report_markdown"]
+
+
+def test_archive_health_report_without_extractions_fallback_keeps_real_data(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", None)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    create_archive = client.post(
+        "/v1/medical-records/archives",
+        headers=headers,
+        json={"title": "无历史病历档案", "description": "仅使用监测与用药数据"},
+    )
+    assert create_archive.status_code == 201
+    archive_id = create_archive.json()["archive"]["id"]
+
+    create_report = client.post(
+        f"/v1/medical-records/archives/{archive_id}/reports",
+        headers=headers,
+        json={"report_window_days": 30, "monitoring_window_days": 30, "medication_window_days": 30},
+    )
+    assert create_report.status_code == 201
+    report_id = create_report.json()["report"]["id"]
+
+    report_detail = client.get(f"/v1/medical-records/reports/{report_id}", headers=headers)
+    assert report_detail.status_code == 200
+    body = report_detail.json()
+    assert body["status"] == "succeeded"
+    assert body["model_name"] == "tremorguard-lightweight-template"
+    assert body["input_snapshot"]["document_summaries"] == []
+    assert body["input_snapshot"]["patient_profile"]["name"] == "张建国"
+    assert body["input_snapshot"]["monitoring_summary"]["event_count"] == 22
+    assert body["input_snapshot"]["medication_summary"]["count"] == 3
+    assert "姓名：张**" in body["report_markdown"]
+    assert "张建国" not in body["report_markdown"]
+    assert "累计记录 22 次震颤事件" in body["report_markdown"]
+    assert "用药窗口内共记录 3 条用药记录" in body["report_markdown"]
+
+
+def test_ai_health_report_bad_agent_output_falls_back_to_real_data(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "dashscope_api_key", SecretStr("test-dashscope-key"))
+    _mock_bad_health_report_agent(monkeypatch)
+    payload = login(client)
+    headers = auth_headers(payload["access_token"])
+
+    report_generate = client.post("/v1/ai/actions/health-report/generate", headers=headers)
+    assert report_generate.status_code == 200
+    report_id = report_generate.json()["action_cards"][0]["resource_id"]
+
+    report_detail = client.get(f"/v1/medical-records/reports/{report_id}", headers=headers)
+    assert report_detail.status_code == 200
+    body = report_detail.json()
+    assert body["status"] == "succeeded"
+    assert body["pdf_status"] == "succeeded"
+    assert body["model_name"] == "tremorguard-lightweight-template"
+    assert body["pipeline_state"]["report_agent_llm"]["status"] == "failed"
+    assert "AI output failed data-consistency check" in body["pipeline_state"]["report_agent_llm"]["detail"]
+    assert "姓名：张**" in body["report_markdown"]
+    assert "张建国" not in body["report_markdown"]
+    assert "累计记录 22 次震颤事件" in body["report_markdown"]
+    assert "用药窗口内共记录 3 条用药记录" in body["report_markdown"]
+    assert "姓名：当前用户" not in body["report_markdown"]
 
 
 def _mock_medical_records_dashscope(monkeypatch):
@@ -610,6 +994,7 @@ def _mock_medical_records_dashscope(monkeypatch):
 
 def test_medical_records_archive_upload_report_pdf_flow(client, monkeypatch):
     _mock_medical_records_dashscope(monkeypatch)
+    _mock_health_report_agent(monkeypatch)
     payload = login(client)
     headers = auth_headers(payload["access_token"])
 
@@ -666,11 +1051,12 @@ def test_medical_records_archive_upload_report_pdf_flow(client, monkeypatch):
     pdf_response = client.get(f"/v1/medical-records/reports/{report_id}/pdf", headers=headers)
     assert pdf_response.status_code == 200
     assert pdf_response.headers["content-type"] == "application/pdf"
-    assert pdf_response.content.startswith(b"%PDF-1.4")
+    assert pdf_response.content.startswith(b"%PDF-")
 
 
 def test_medical_records_report_versioning_and_access_control(client, monkeypatch):
     _mock_medical_records_dashscope(monkeypatch)
+    _mock_health_report_agent(monkeypatch)
     payload = login(client)
     headers = auth_headers(payload["access_token"])
 

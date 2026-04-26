@@ -372,6 +372,23 @@ def _matches_keywords(content: str, keywords: tuple[str, ...]) -> bool:
     return any(keyword in content for keyword in keywords)
 
 
+def _resolve_latest_user_message(messages: list[AiChatMessageInput]) -> str:
+    return next((message.content.strip() for message in reversed(messages) if message.role == "user"), "")
+
+
+def _has_rehab_intent(content: str) -> bool:
+    return _matches_keywords(content.lower(), REHAB_KEYWORDS)
+
+
+def _has_report_intent(content: str) -> bool:
+    return _matches_keywords(content.lower(), REPORT_KEYWORDS)
+
+
+def _has_mixed_action_intent(messages: list[AiChatMessageInput]) -> bool:
+    latest_user_message = _resolve_latest_user_message(messages)
+    return bool(latest_user_message and _has_rehab_intent(latest_user_message) and _has_report_intent(latest_user_message))
+
+
 def _build_rehab_card_summary(plan) -> str:
     return f"{plan.title}，共 {len(plan.items)} 个训练模块，版本 V{plan.version}。"
 
@@ -459,7 +476,7 @@ def _build_action_cards(
     messages: list[AiChatMessageInput],
     background_tasks: BackgroundTasks | None = None,
 ) -> tuple[list[AiChatActionCardDTO], list[str]]:
-    latest_user_message = next((message.content.strip() for message in reversed(messages) if message.role == "user"), "")
+    latest_user_message = _resolve_latest_user_message(messages)
     if not latest_user_message:
         return [], []
 
@@ -467,7 +484,7 @@ def _build_action_cards(
     cards: list[AiChatActionCardDTO] = []
     notes: list[str] = []
 
-    if _matches_keywords(content, REHAB_KEYWORDS):
+    if _has_rehab_intent(content):
         try:
             target_date = resolve_monitoring_target_date(clinical_session, current_user)
             guidance = build_guidance_response(clinical_session, current_user.id, target_date)
@@ -491,7 +508,7 @@ def _build_action_cards(
             else:
                 notes.append(str(detail))
 
-    if _matches_keywords(content, REPORT_KEYWORDS):
+    if _has_report_intent(content):
         report = medical_records_service.create_ai_health_report_for_chat(clinical_session, current_user)
         if background_tasks is not None:
             background_tasks.add_task(
@@ -519,7 +536,7 @@ def create_ai_chat_completion(
         )
 
     route_decision = AgentRouter.route(messages)
-    if route_decision.agent_type == HEALTH_REPORT_AGENT_TYPE:
+    if route_decision.agent_type == HEALTH_REPORT_AGENT_TYPE and not _has_mixed_action_intent(messages):
         return generate_health_report_action(
             clinical_session,
             current_user,
@@ -564,7 +581,7 @@ def stream_ai_chat_completion(
         )
 
     route_decision = AgentRouter.route(messages)
-    if route_decision.agent_type == HEALTH_REPORT_AGENT_TYPE:
+    if route_decision.agent_type == HEALTH_REPORT_AGENT_TYPE and not _has_mixed_action_intent(messages):
         result = generate_health_report_action(
             clinical_session,
             current_user,

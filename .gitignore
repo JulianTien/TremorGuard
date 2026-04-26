@@ -1,1 +1,8 @@
 .omx/
+.DS_Store
+.playwright-cli/
+output/
+tmp/
+test-results/
+tremor-guard-backend/build/
+tremor-guard-backend/storage/medical_records/

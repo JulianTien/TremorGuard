@@ -1,32 +1,34 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
-import { AiDoctorPage } from './pages/ai-doctor-page'
-import { LoginPage } from './pages/login-page'
-import { MedicalRecordArchivePage } from './pages/medical-record-archive-page'
-import { MedicalRecordReportPage } from './pages/medical-record-report-page'
-import { MedicalRecordsPage } from './pages/medical-records-page'
-import { MedicationPage } from './pages/medication-page'
-import { OnboardingDeviceBindingPage } from './pages/onboarding-device-binding-page'
-import { OnboardingProfilePage } from './pages/onboarding-profile-page'
-import { OverviewPage } from './pages/overview-page'
-import { ProfilePage } from './pages/profile-page'
-import { RehabGuidancePage } from './pages/rehab-guidance-page'
-import { RegisterPage } from './pages/register-page'
-import { ReportsPage } from './pages/reports-page'
+import {
+  AiDoctorRoute,
+  LoginRoute,
+  MedicalRecordArchiveRoute,
+  MedicalRecordReportRoute,
+  MedicalRecordsRoute,
+  MedicationRoute,
+  OnboardingDeviceBindingRoute,
+  OnboardingProfileRoute,
+  OverviewRoute,
+  ProfileRoute,
+  RehabGuidanceRoute,
+  RegisterRoute,
+  ReportsRoute,
+} from './route-pages'
 import { OnboardingGuard, ProtectedAppLayout, PublicOnlyLayout } from './router-guards'
 
 export const router = createBrowserRouter([
   {
     element: <PublicOnlyLayout />,
     children: [
-      { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
+      { path: '/login', element: <LoginRoute /> },
+      { path: '/register', element: <RegisterRoute /> },
     ],
   },
   {
     path: '/onboarding/profile',
     element: (
       <OnboardingGuard requiredState="profile_required">
-        <OnboardingProfilePage />
+        <OnboardingProfileRoute />
       </OnboardingGuard>
     ),
   },
@@ -34,7 +36,7 @@ export const router = createBrowserRouter([
     path: '/onboarding/device-binding',
     element: (
       <OnboardingGuard requiredState="device_binding_required">
-        <OnboardingDeviceBindingPage />
+        <OnboardingDeviceBindingRoute />
       </OnboardingGuard>
     ),
   },
@@ -43,16 +45,16 @@ export const router = createBrowserRouter([
     element: <ProtectedAppLayout />,
     children: [
       { index: true, element: <Navigate to="/overview" replace /> },
-      { path: 'overview', element: <OverviewPage /> },
-      { path: 'ai-doctor', element: <AiDoctorPage /> },
-      { path: 'medication', element: <MedicationPage /> },
-      { path: 'rehab-guidance', element: <RehabGuidancePage /> },
-      { path: 'records', element: <MedicalRecordsPage /> },
-      { path: 'records/reports/:reportId', element: <MedicalRecordReportPage /> },
-      { path: 'records/:archiveId', element: <MedicalRecordArchivePage /> },
-      { path: 'reports', element: <ReportsPage /> },
-      { path: 'reports/:reportId', element: <MedicalRecordReportPage /> },
-      { path: 'profile', element: <ProfilePage /> },
+      { path: 'overview', element: <OverviewRoute /> },
+      { path: 'ai-doctor', element: <AiDoctorRoute /> },
+      { path: 'medication', element: <MedicationRoute /> },
+      { path: 'rehab-guidance', element: <RehabGuidanceRoute /> },
+      { path: 'records', element: <MedicalRecordsRoute /> },
+      { path: 'records/reports/:reportId', element: <MedicalRecordReportRoute /> },
+      { path: 'records/:archiveId', element: <MedicalRecordArchiveRoute /> },
+      { path: 'reports', element: <ReportsRoute /> },
+      { path: 'reports/:reportId', element: <MedicalRecordReportRoute /> },
+      { path: 'profile', element: <ProfileRoute /> },
     ],
   },
   { path: '*', element: <Navigate to="/login" replace /> },

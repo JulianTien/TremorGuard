@@ -357,6 +357,9 @@ export function AiDoctorPage() {
     }
   }
 
+  const hasActiveConversation =
+    messages.some((message) => message.id !== 'welcome-message') || Boolean(streamingMessage) || isSending || isExecutingAction
+
   return (
     <div className="flex h-[calc(100vh-12rem)] min-h-0 flex-col gap-6 lg:flex-row">
       <div className="hidden h-full min-h-0 w-64 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white md:flex md:flex-col">
@@ -392,72 +395,74 @@ export function AiDoctorPage() {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <ComplianceBanner variant="ai" />
 
-        <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-4">
-          <div className="mb-4">
-            <p className="text-sm font-semibold text-slate-900">统一智能入口</p>
-            <p className="mt-1 text-xs leading-6 text-slate-500">
-              AI 医生会优先解读监测总览、用药记录和病历档案，再触发康复计划与 AI 健康报告，不再只是单纯问答助手。
-            </p>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => {
-                void handleExplainCurrentState()
-              }}
-              disabled={isSending || isExecutingAction}
-              className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-200 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-teal-50 p-2 text-teal-600">
-                  <Stethoscope className="h-4 w-4" />
+        {!hasActiveConversation ? (
+          <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-4">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-slate-900">统一智能入口</p>
+              <p className="mt-1 text-xs leading-6 text-slate-500">
+                AI 医生会优先解读监测总览、用药记录和病历档案，再触发康复计划与 AI 健康报告，不再只是单纯问答助手。
+              </p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleExplainCurrentState()
+                }}
+                disabled={isSending || isExecutingAction}
+                className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-200 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-teal-50 p-2 text-teal-600">
+                    <Stethoscope className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">解读当前监测与用药</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">快速生成今日状态说明和复诊沟通重点。</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">解读当前监测与用药</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">快速生成今日状态说明和复诊沟通重点。</p>
-                </div>
-              </div>
-            </button>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                void handleGenerateRehabPlan()
-              }}
-              disabled={isSending || isExecutingAction}
-              className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-200 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-teal-50 p-2 text-teal-600">
-                  <Sparkles className="h-4 w-4" />
+              <button
+                type="button"
+                onClick={() => {
+                  void handleGenerateRehabPlan()
+                }}
+                disabled={isSending || isExecutingAction}
+                className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-200 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-teal-50 p-2 text-teal-600">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">生成或查看康复计划</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">基于证据触发候选计划，并在聊天流中继续确认。</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">生成或查看康复计划</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">基于证据触发候选计划，并在聊天流中继续确认。</p>
-                </div>
-              </div>
-            </button>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                void handleGenerateHealthReport()
-              }}
-              disabled={isSending || isExecutingAction}
-              className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-200 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-teal-50 p-2 text-teal-600">
-                  <FileText className="h-4 w-4" />
+              <button
+                type="button"
+                onClick={() => {
+                  void handleGenerateHealthReport()
+                }}
+                disabled={isSending || isExecutingAction}
+                className="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-200 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-teal-50 p-2 text-teal-600">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">生成 AI 健康报告</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">整合监测、用药和病历证据，输出可复诊使用的结构化结果。</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">生成 AI 健康报告</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">整合监测、用药和病历证据，输出可复诊使用的结构化结果。</p>
-                </div>
-              </div>
-            </button>
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="shrink-0 border-b border-slate-100 bg-white px-4 py-3">
           <div className="flex items-center justify-between gap-3">

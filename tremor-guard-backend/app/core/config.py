@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     dashscope_enable_search: bool = False
     medical_records_storage_dir: str = "./storage/medical_records"
     medical_records_max_upload_bytes: int = 5_000_000
+    health_report_mask_identifiers: bool = True
+    health_report_timezone: str = "Asia/Shanghai"
+    health_report_font_family: str = "STHeiti, Songti SC, Noto Sans CJK SC, Source Han Sans SC, sans-serif"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

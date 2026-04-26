@@ -5,6 +5,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+import httpx
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -13,6 +14,16 @@ from app.db import session as db_session_module
 from app.main import app
 from app.services import medical_records as medical_records_service
 from app.services.seeds import seed_clinical, seed_identity
+
+
+def _blocked_external_request(*args, **kwargs):
+    raise AssertionError("Unexpected external DashScope request in backend test. Mock it explicitly.")
+
+
+@pytest.fixture(autouse=True)
+def block_unmocked_external_requests(monkeypatch):
+    monkeypatch.setattr(httpx, "post", _blocked_external_request)
+    monkeypatch.setattr(httpx, "stream", _blocked_external_request)
 
 
 def run_upgrade(config_path: Path, database_url: str) -> None:

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
+import json
 from statistics import mean
 from string import Template
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,7 +21,8 @@ from app.models.clinical import (
     TremorEvent,
 )
 from app.models.identity import User
-from app.services.dashboard import get_latest_device_status
+from app.services.dashscope_client import post_chat_completion
+from app.services.dashboard import format_device_status, get_latest_device_status
 
 REPORT_AGENT_SYSTEM_PROMPT = """你是一名用于帕金森病健康管理场景的医疗报告生成助手。你的任务是根据患者的可穿戴设备监测数据、用药记录、病史摘要和问卷信息，生成一份“帕金森患者健康分析报告”。
 
@@ -66,9 +66,9 @@ REPORT_AGENT_SYSTEM_PROMPT = """你是一名用于帕金森病健康管理场景
 
 7. 输出要求
 - 输出完整正式报告，不输出提示词解释，不输出思维过程。
-- 不要使用表格。
-- 不要省略章节。
-- 如果某章节无数据，也要生成有内容的分析性段落，而不是只写“无”或“待补充”。"""
+- 可以使用 Markdown 表格、引用块、二级小标题和可执行清单来提升可读性。
+- 不要省略章节；章节标题必须与用户要求一致。
+- 如果某章节无数据，也要说明该项评估的临床意义、缺失资料会限制什么判断，以及建议补充什么资料，而不是只写“无”或“待补充”。"""
 
 REPORT_AGENT_USER_TEMPLATE = Template(
     """请根据以下患者资料，生成一份详细的《帕金森患者健康分析报告》。
@@ -106,6 +106,30 @@ REPORT_AGENT_USER_TEMPLATE = Template(
 [用药记录]
 $medication_records
 
+[系统已计算的分析摘要]
+$analytics_summary_text
+
+[用药-症状关联摘要]
+$medication_correlation_summary
+
+[历史基线对比]
+$baseline_summary
+
+[数据补充建议]
+$data_completion_guidance
+
+[复诊准备清单]
+$followup_checklist
+
+[症状自评问卷]
+$self_assessment_questions
+
+[知识科普卡片]
+$knowledge_cards
+
+[参考性健康管理提示]
+$clinical_reference_notes
+
 [既往史]
 $past_history
 
@@ -137,39 +161,49 @@ $scales
 请按以下结构输出：
 1. 基本信息
 2. 评估目的
-3. 主诉与现病史
-4. 既往史、家族史及生活方式
-5. 当前治疗与用药情况
-6. 运动症状评估
-7. 非运动症状评估
-8. 日常生活能力评估
-9. 体格检查
-10. 辅助检查结果
-11. 量表评分与疾病分期说明
-12. 主要健康问题总结
-13. 综合分析
-14. 干预建议
-15. 随访计划
-16. 结论"""
+3. 本次监测亮点与异常提示
+4. 主诉与现病史
+5. 既往史、家族史及生活方式
+6. 当前治疗与用药情况
+7. 用药-症状关联分析
+8. 运动症状评估
+9. 非运动症状评估
+10. 日常生活能力评估
+11. 体格检查
+12. 辅助检查结果
+13. 量表评分与疾病分期
+14. 主要健康问题总结
+15. 综合分析
+16. 干预建议
+17. 复诊准备清单
+18. 症状自评问卷
+19. 知识科普卡片
+20. 随访计划
+21. 结论"""
 )
 
 REPORT_TEMPLATE_SECTIONS = [
     "1. 基本信息",
     "2. 评估目的",
-    "3. 主诉与现病史",
-    "4. 既往史、家族史及生活方式",
-    "5. 当前治疗与用药情况",
-    "6. 运动症状评估",
-    "7. 非运动症状评估",
-    "8. 日常生活能力评估",
-    "9. 体格检查",
-    "10. 辅助检查结果",
-    "11. 量表评分与疾病分期说明",
-    "12. 主要健康问题总结",
-    "13. 综合分析",
-    "14. 干预建议",
-    "15. 随访计划",
-    "16. 结论",
+    "3. 本次监测亮点与异常提示",
+    "4. 主诉与现病史",
+    "5. 既往史、家族史及生活方式",
+    "6. 当前治疗与用药情况",
+    "7. 用药-症状关联分析",
+    "8. 运动症状评估",
+    "9. 非运动症状评估",
+    "10. 日常生活能力评估",
+    "11. 体格检查",
+    "12. 辅助检查结果",
+    "13. 量表评分与疾病分期",
+    "14. 主要健康问题总结",
+    "15. 综合分析",
+    "16. 干预建议",
+    "17. 复诊准备清单",
+    "18. 症状自评问卷",
+    "19. 知识科普卡片",
+    "20. 随访计划",
+    "21. 结论",
 ]
 
 
@@ -233,13 +267,17 @@ class ReportContextAssembler:
         trigger_message: str | None = None,
     ) -> dict[str, object]:
         profile = session.scalar(select(PatientProfile).where(PatientProfile.user_id == user.id))
+        monitoring_start = datetime.combine(report.monitoring_window_start, time.min, tzinfo=UTC)
+        monitoring_end = datetime.combine(report.monitoring_window_end + timedelta(days=1), time.min, tzinfo=UTC)
+        medication_start = datetime.combine(report.medication_window_start, time.min, tzinfo=UTC)
+        medication_end = datetime.combine(report.medication_window_end + timedelta(days=1), time.min, tzinfo=UTC)
         monitoring_events = list(
             session.scalars(
                 select(TremorEvent)
                 .where(
                     TremorEvent.user_id == user.id,
-                    TremorEvent.start_at >= datetime.combine(report.monitoring_window_start, time.min, tzinfo=UTC),
-                    TremorEvent.start_at < datetime.combine(report.monitoring_window_end + timedelta(days=1), time.min, tzinfo=UTC),
+                    TremorEvent.start_at >= monitoring_start,
+                    TremorEvent.start_at < monitoring_end,
                 )
                 .order_by(TremorEvent.start_at)
             )
@@ -247,9 +285,12 @@ class ReportContextAssembler:
         medication_logs = list(
             session.scalars(
                 select(MedicationLog)
-                .where(MedicationLog.user_id == user.id)
-                .order_by(MedicationLog.taken_at.desc())
-                .limit(20)
+                .where(
+                    MedicationLog.user_id == user.id,
+                    MedicationLog.taken_at >= medication_start,
+                    MedicationLog.taken_at < medication_end,
+                )
+                .order_by(MedicationLog.taken_at)
             )
         )
         extractions = list(
@@ -265,13 +306,71 @@ class ReportContextAssembler:
         )
         archive = session.scalar(select(MedicalRecordArchive).where(MedicalRecordArchive.id == report.archive_id))
         device_binding, snapshot = get_latest_device_status(session, user.id)
-        del device_binding, snapshot
+        device_status = format_device_status(device_binding, snapshot)
 
         event_count = len(monitoring_events)
         avg_amplitude = round(mean(event.rms_amplitude for event in monitoring_events), 3) if monitoring_events else 0
         peak_amplitude = round(max((event.rms_amplitude for event in monitoring_events), default=0), 3)
+        avg_duration = round(mean(event.duration_sec for event in monitoring_events), 1) if monitoring_events else 0
+        max_duration = max((event.duration_sec for event in monitoring_events), default=0)
+        avg_frequency = round(mean(event.dominant_hz for event in monitoring_events), 2) if monitoring_events else 0
         has_time_distribution, time_distribution_summary = _event_time_distribution_summary(monitoring_events)
         has_trend, trend_summary = _trend_summary(monitoring_events)
+        patient_profile = {
+            "name": profile.name if profile else user.display_name,
+            "age": profile.age if profile else None,
+            "gender": profile.gender if profile else None,
+            "diagnosis": profile.diagnosis if profile else None,
+            "duration": profile.duration if profile else None,
+            "hospital": profile.hospital if profile else None,
+        }
+        monitoring_summary = {
+            "event_count": event_count,
+            "avg_duration_sec": avg_duration,
+            "max_duration_sec": max_duration,
+            "avg_amplitude": avg_amplitude,
+            "max_amplitude": peak_amplitude,
+            "avg_frequency_hz": avg_frequency,
+            "events": [
+                {
+                    "start_at": event.start_at.isoformat(),
+                    "duration_sec": event.duration_sec,
+                    "dominant_hz": event.dominant_hz,
+                    "rms_amplitude": event.rms_amplitude,
+                    "confidence": event.confidence,
+                }
+                for event in monitoring_events[-50:]
+            ],
+        }
+        medication_summary = {
+            "count": len(medication_logs),
+            "entries": [
+                {
+                    "name": item.name,
+                    "dose": item.dose,
+                    "taken_at": item.taken_at.isoformat(),
+                    "status": item.status,
+                }
+                for item in medication_logs
+            ],
+        }
+        extraction_snapshots = []
+        information_gaps: list[str] = []
+        for extraction in extractions:
+            payload = extraction.structured_payload if isinstance(extraction.structured_payload, dict) else {}
+            extraction_snapshots.append(
+                {
+                    "file_id": extraction.file_id,
+                    "extraction_id": extraction.id,
+                    "extraction_version": extraction.version,
+                    "document_type": extraction.document_type,
+                    "summary_text": extraction.summary_text,
+                    "structured_payload": payload,
+                }
+            )
+            gaps = payload.get("information_gaps")
+            if isinstance(gaps, list):
+                information_gaps.extend(str(item) for item in gaps if item)
 
         medications_text = _stringify_lines(
             [
@@ -294,10 +393,46 @@ class ReportContextAssembler:
             report_purpose = "用于复诊前重点问题梳理、病情沟通准备和健康管理归档。"
 
         return {
-            "name": profile.name if profile else user.display_name,
-            "age": str(profile.age) if profile else "当前未提供",
-            "gender": profile.gender if profile else "当前未提供",
-            "diagnosis_background": profile.diagnosis if profile else "当前未提供",
+            "archive_id": archive.id if archive else report.archive_id,
+            "archive_title": archive.title if archive else "当前未提供",
+            "report_window": {
+                "start": report.report_window_start.isoformat(),
+                "end": report.report_window_end.isoformat(),
+            },
+            "monitoring_window_range": {
+                "start": report.monitoring_window_start.isoformat(),
+                "end": report.monitoring_window_end.isoformat(),
+            },
+            "medication_window": {
+                "start": report.medication_window_start.isoformat(),
+                "end": report.medication_window_end.isoformat(),
+            },
+            "selected_document_versions": [
+                {"file_id": extraction.file_id, "document_version": 1} for extraction in extractions
+            ],
+            "selected_extraction_versions": [
+                {"extraction_id": extraction.id, "file_id": extraction.file_id, "version": extraction.version}
+                for extraction in extractions
+            ],
+            "patient_profile": patient_profile,
+            "device_snapshot": (
+                {
+                    "connection": device_status.connection,
+                    "connection_label": device_status.connection_label,
+                    "battery": device_status.battery,
+                    "firmware": device_status.firmware,
+                }
+                if device_status
+                else None
+            ),
+            "monitoring_summary": monitoring_summary,
+            "medication_summary": medication_summary,
+            "document_summaries": extraction_snapshots,
+            "information_gaps": information_gaps,
+            "name": patient_profile["name"],
+            "age": str(patient_profile["age"]) if patient_profile["age"] is not None else "当前未提供",
+            "gender": patient_profile["gender"] or "当前未提供",
+            "diagnosis_background": patient_profile["diagnosis"] or "当前未提供",
             "report_purpose": report_purpose,
             "monitoring_window": f"{report.monitoring_window_start.isoformat()} 至 {report.monitoring_window_end.isoformat()}",
             "tremor_event_count": str(event_count),
@@ -318,7 +453,6 @@ class ReportContextAssembler:
             "scales": _stringify_lines(scales),
             "trigger_reason": trigger_message or "用户主动发起健康报告生成请求。",
             "supplemental_focus": trigger_message or "当前未提供额外补充关注点。",
-            "archive_title": archive.title if archive else "当前未提供",
         }
 
 
@@ -327,7 +461,13 @@ class HealthReportAgent:
 
     def build_user_prompt(self, context: dict[str, object]) -> str:
         normalized_context = {
-            key: (value if isinstance(value, str) and value.strip() else "当前未提供。")
+            key: (
+                value
+                if isinstance(value, str) and value.strip()
+                else json.dumps(value, ensure_ascii=False)
+                if isinstance(value, (dict, list))
+                else "当前未提供。"
+            )
             for key, value in context.items()
         }
         return REPORT_AGENT_USER_TEMPLATE.substitute(normalized_context)
@@ -348,17 +488,7 @@ class HealthReportAgent:
             "temperature": 0.2,
             "max_tokens": 4200,
         }
-        response = httpx.post(
-            f"{settings.dashscope_base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.dashscope_api_key.get_secret_value()}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=settings.dashscope_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
+        data = post_chat_completion(payload)
         choices = data.get("choices")
         if not isinstance(choices, list) or not choices:
             raise ValueError("报告生成 Agent 返回格式异常。")

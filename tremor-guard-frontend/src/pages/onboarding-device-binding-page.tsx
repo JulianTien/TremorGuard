@@ -82,6 +82,16 @@ export function OnboardingDeviceBindingPage() {
             一期采用“一人一台有效设备”规则。若当前账号已有绑定设备，绑定新设备后旧设备会自动失效。
           </p>
 
+          <button
+            type="button"
+            onClick={() => {
+              navigate('/onboarding/profile')
+            }}
+            className="mt-6 rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5"
+          >
+            返回修改患者资料
+          </button>
+
           <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm font-medium text-white">本地演示可用设备</p>
             <p className="mt-3 font-mono text-sm text-slate-300">S/N: {DEMO_DEVICE_SERIAL}</p>

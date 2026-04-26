@@ -48,23 +48,26 @@ from app.schemas.domain import (
 )
 from app.services.audit import record_audit_log
 from app.services.dashboard import format_device_status, get_latest_device_status
+from app.services.health_report_analytics import enrich_health_report_context, report_patient_token
 from app.services.markdown_pdf import BuiltinMarkdownPdfRenderer
 from app.services.report_agent import HealthReportAgent, ReportContextAssembler
 
 DISCLAIMER_TEXT = "本报告仅供健康管理与复诊沟通参考，不能替代医生诊断、分期、处方或药量调整。"
 DISCLAIMER_VERSION = "non-diagnostic-v1"
-PROMPT_VERSION = "medical-records-v1"
+PROMPT_VERSION = "medical-records-v2"
 AI_HEALTH_ARCHIVE_TITLE = "AI健康报告档案"
 AI_HEALTH_REPORT_TITLE = "AI健康报告"
 HEALTH_REPORT_TEMPLATE_NAME = "Parkinson-health-analysis-report"
-HEALTH_REPORT_TEMPLATE_VERSION = "v1"
+HEALTH_REPORT_TEMPLATE_VERSION = "v2"
 HEALTH_REPORT_TEMPLATE_TITLE = "帕金森患者健康分析报告"
 HEALTH_REPORT_TEMPLATE_SECTIONS = [
     "基本信息",
     "评估目的",
+    "本次监测亮点与异常提示",
     "主诉与现病史",
     "既往史、家族史及生活方式",
     "当前治疗与用药情况",
+    "用药-症状关联分析",
     "运动症状评估",
     "非运动症状评估",
     "日常生活能力评估",
@@ -74,6 +77,9 @@ HEALTH_REPORT_TEMPLATE_SECTIONS = [
     "主要健康问题总结",
     "综合分析",
     "干预建议",
+    "复诊准备清单",
+    "症状自评问卷",
+    "知识科普卡片",
     "随访计划",
     "结论",
 ]
@@ -140,21 +146,17 @@ def _ascii_filename_fallback(value: str) -> str:
 
 
 def _report_download_filename(report: LongitudinalReport) -> str:
-    patient_name = None
+    patient_id = report_patient_token(report.user_id)
     if isinstance(report.input_snapshot, dict):
-        patient_profile = report.input_snapshot.get("patient_profile")
-        if isinstance(patient_profile, dict):
-            patient_name = str(patient_profile.get("name") or "").strip() or None
+        report_metadata = report.input_snapshot.get("report_metadata")
+        if isinstance(report_metadata, dict):
+            patient_id = str(report_metadata.get("patient_token") or patient_id)
+        patient_token = report.input_snapshot.get("patient_token")
+        if isinstance(patient_token, str) and patient_token.strip():
+            patient_id = patient_token.strip()
 
-    parts = [
-        "TremorGuard",
-        _sanitize_download_filename_segment(patient_name),
-        "health-report",
-        report.report_window_end.strftime("%Y%m%d"),
-        f"v{report.version}",
-    ]
-    file_name = "-".join(part for part in parts if part)
-    return f"{file_name or report.id}.pdf"
+    generated_date = (report.completed_at or report.created_at or _utcnow()).strftime("%Y%m%d")
+    return f"PD_Report_{_sanitize_download_filename_segment(patient_id)}_{generated_date}.pdf"
 
 
 def _content_disposition_headers(filename: str) -> dict[str, str]:
@@ -380,7 +382,7 @@ def _build_canonical_report_markdown(sections: Sequence[dict[str, str]]) -> str:
 
 
 def _build_summary_from_sections(sections: Sequence[dict[str, str]]) -> str:
-    important_titles = {"12. 主要健康问题总结", "16. 结论"}
+    important_titles = {"14. 主要健康问题总结", "21. 结论"}
     blocks: list[str] = []
     for section in sections:
         if section["title"] in important_titles:
@@ -414,6 +416,12 @@ def _build_report_payload_from_sections(
     context: dict,
 ) -> dict[str, object]:
     section_map = {section["title"]: section["body"] for section in sections}
+
+    def section_body(title: str) -> str:
+        for section_title, body in section_map.items():
+            if section_title.endswith(title):
+                return body
+        return ""
     information_gaps = [
         item
         for item in context.get("information_gaps") or []
@@ -426,51 +434,100 @@ def _build_report_payload_from_sections(
             if MISSING_DATA_PLACEHOLDER in section["body"]
         ]
 
-    return {
+    payload = {
         "title": HEALTH_REPORT_TEMPLATE_TITLE,
         "executive_summary": _strip_markdown_text(
-            section_map.get("12. 主要健康问题总结") or section_map.get("16. 结论") or MISSING_DATA_PLACEHOLDER
+            section_body("主要健康问题总结") or section_body("结论") or MISSING_DATA_PLACEHOLDER
         ),
         "historical_record_summary": _markdown_lines_to_items(
-            section_map.get("4. 既往史、家族史及生活方式", "")
+            section_body("既往史、家族史及生活方式")
         ) or [MISSING_DATA_PLACEHOLDER],
         "monitoring_observations": (
-            _markdown_lines_to_items(section_map.get("6. 运动症状评估", ""))
-            + _markdown_lines_to_items(section_map.get("7. 非运动症状评估", ""))
-            + _markdown_lines_to_items(section_map.get("8. 日常生活能力评估", ""))
+            _markdown_lines_to_items(section_body("本次监测亮点与异常提示"))
+            + _markdown_lines_to_items(section_body("运动症状评估"))
+            + _markdown_lines_to_items(section_body("非运动症状评估"))
+            + _markdown_lines_to_items(section_body("日常生活能力评估"))
         ) or [MISSING_DATA_PLACEHOLDER],
         "medication_observations": _markdown_lines_to_items(
-            section_map.get("5. 当前治疗与用药情况", "")
+            section_body("当前治疗与用药情况") + "\n" + section_body("用药-症状关联分析")
         ) or [MISSING_DATA_PLACEHOLDER],
         "information_gaps": information_gaps or [MISSING_DATA_PLACEHOLDER],
         "doctor_discussion_points": (
-            _markdown_lines_to_items(section_map.get("14. 干预建议", ""))
-            + _markdown_lines_to_items(section_map.get("15. 随访计划", ""))
+            _markdown_lines_to_items(section_body("干预建议"))
+            + _markdown_lines_to_items(section_body("复诊准备清单"))
+            + _markdown_lines_to_items(section_body("随访计划"))
         ) or [MISSING_DATA_PLACEHOLDER],
         "non_diagnostic_notice": DISCLAIMER_TEXT,
     }
+    for key in (
+        "analytics_summary_text",
+        "kpi_cards",
+        "visualization_data",
+        "tremor_severity_distribution",
+        "time_distribution",
+        "medication_adherence",
+        "medication_correlation_summary",
+        "baseline_summary",
+        "monitoring_highlights",
+    ):
+        if key in context:
+            payload[key] = context[key]
+    payload["analytics_summary"] = context.get("analytics_summary_text")
+    payload["pdf_render_metadata"] = {
+        "patient_token": context.get("patient_token"),
+        "report_metadata": context.get("report_metadata"),
+        "mask_identifiers": (context.get("report_metadata") or {}).get("mask_identifiers")
+        if isinstance(context.get("report_metadata"), dict)
+        else None,
+    }
+    return payload
 
 
 def _render_report_markdown_from_payload(report_payload: dict | None) -> str | None:
     if not isinstance(report_payload, dict):
         return None
+    analytics_summary = str(report_payload.get("analytics_summary") or MISSING_DATA_PLACEHOLDER)
+    medication_observations = "\n".join(
+        str(item) for item in report_payload.get("medication_observations", []) if str(item).strip()
+    ) or MISSING_DATA_PLACEHOLDER
+    monitoring_observations = "\n".join(
+        str(item) for item in report_payload.get("monitoring_observations", []) if str(item).strip()
+    ) or MISSING_DATA_PLACEHOLDER
+    doctor_discussion_points = "\n".join(
+        str(item) for item in report_payload.get("doctor_discussion_points", []) if str(item).strip()
+    ) or MISSING_DATA_PLACEHOLDER
+    legacy_body_by_title = {
+        "基本信息": MISSING_DATA_PLACEHOLDER,
+        "评估目的": "用于辅助健康管理与复诊沟通，不替代医生诊断。",
+        "本次监测亮点与异常提示": analytics_summary,
+        "主诉与现病史": analytics_summary,
+        "既往史、家族史及生活方式": "\n".join(
+            str(item) for item in report_payload.get("historical_record_summary", []) if str(item).strip()
+        ) or MISSING_DATA_PLACEHOLDER,
+        "当前治疗与用药情况": medication_observations,
+        "用药-症状关联分析": str(
+            (report_payload.get("medication_correlation_summary") or {}).get("wearing_off_signal")
+            if isinstance(report_payload.get("medication_correlation_summary"), dict)
+            else MISSING_DATA_PLACEHOLDER
+        ),
+        "运动症状评估": monitoring_observations,
+        "非运动症状评估": "当前未采集非运动症状问卷，建议补充睡眠、便秘、情绪、认知和自主神经相关观察。",
+        "日常生活能力评估": "当前未采集日常生活能力量表，建议补充穿衣、进食、行走、转身和跌倒风险记录。",
+        "体格检查": "当前未纳入线下查体结果，建议复诊时由医生结合肌张力、步态和平衡检查综合评估。",
+        "辅助检查结果": "当前未纳入影像、化验或量表原文，建议补充既往检查资料。",
+        "量表评分与疾病分期": "当前未采集标准化量表评分，且本系统不提供疾病分期结论。",
+        "主要健康问题总结": str(report_payload.get("executive_summary") or MISSING_DATA_PLACEHOLDER),
+        "综合分析": analytics_summary,
+        "干预建议": doctor_discussion_points,
+        "复诊准备清单": doctor_discussion_points,
+        "症状自评问卷": "复诊前建议记录震颤最明显时段、诱因、服药后变化、跌倒或近跌倒、头晕和睡眠情况。",
+        "知识科普卡片": "本报告中的剂末波动、幅度分层和用药依从率均为健康管理观察指标，不替代医生判断。",
+        "随访计划": "建议携带本报告与原始病历资料复诊，由专业医生综合评估。",
+        "结论": str(report_payload.get("executive_summary") or MISSING_DATA_PLACEHOLDER),
+    }
     legacy_sections = [
-        ("1. 基本信息", MISSING_DATA_PLACEHOLDER),
-        ("2. 评估目的", "用于辅助健康管理与复诊沟通，不替代医生诊断。"),
-        ("3. 主诉与现病史", MISSING_DATA_PLACEHOLDER),
-        ("4. 既往史、家族史及生活方式", "\n".join(str(item) for item in report_payload.get("historical_record_summary", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
-        ("5. 当前治疗与用药情况", "\n".join(str(item) for item in report_payload.get("medication_observations", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
-        ("6. 运动症状评估", "\n".join(str(item) for item in report_payload.get("monitoring_observations", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
-        ("7. 非运动症状评估", MISSING_DATA_PLACEHOLDER),
-        ("8. 日常生活能力评估", MISSING_DATA_PLACEHOLDER),
-        ("9. 体格检查", MISSING_DATA_PLACEHOLDER),
-        ("10. 辅助检查结果", MISSING_DATA_PLACEHOLDER),
-        ("11. 量表评分与疾病分期", MISSING_DATA_PLACEHOLDER),
-        ("12. 主要健康问题总结", str(report_payload.get("executive_summary") or MISSING_DATA_PLACEHOLDER)),
-        ("13. 综合分析", MISSING_DATA_PLACEHOLDER),
-        ("14. 干预建议", "\n".join(str(item) for item in report_payload.get("doctor_discussion_points", []) if str(item).strip()) or MISSING_DATA_PLACEHOLDER),
-        ("15. 随访计划", MISSING_DATA_PLACEHOLDER),
-        ("16. 结论", str(report_payload.get("executive_summary") or MISSING_DATA_PLACEHOLDER)),
+        (f"{index}. {title}", legacy_body_by_title.get(title, MISSING_DATA_PLACEHOLDER))
+        for index, title in enumerate(HEALTH_REPORT_TEMPLATE_SECTIONS, start=1)
     ]
     return _build_canonical_report_markdown(
         [{"id": f"legacy-{index}", "title": title, "body": body} for index, (title, body) in enumerate(legacy_sections, start=1)]
@@ -1162,7 +1219,7 @@ def _build_template_outline_text() -> str:
 def _build_lightweight_report_markdown(context: dict) -> str:
     monitoring = context.get("monitoring_summary") or {}
     medication = context.get("medication_summary") or {}
-    patient = context.get("patient_profile") or {}
+    patient = context.get("display_patient_profile") or context.get("patient_profile") or {}
     document_summaries = context.get("document_summaries") or []
     information_gaps = list(context.get("information_gaps") or [])
 
@@ -1171,9 +1228,76 @@ def _build_lightweight_report_markdown(context: dict) -> str:
     max_amplitude = monitoring.get("max_amplitude") or 0
     medication_count = int(medication.get("count") or 0)
     patient_name = patient.get("name") or "当前用户"
+    analytics_text = str(context.get("analytics_summary_text") or "")
+    kpi_cards = context.get("kpi_cards") if isinstance(context.get("kpi_cards"), list) else []
+    severity_rows = (
+        context.get("tremor_severity_distribution")
+        if isinstance(context.get("tremor_severity_distribution"), list)
+        else []
+    )
+    time_rows = context.get("time_distribution") if isinstance(context.get("time_distribution"), list) else []
+    adherence = context.get("medication_adherence") if isinstance(context.get("medication_adherence"), dict) else {}
+    correlation = (
+        context.get("medication_correlation_summary")
+        if isinstance(context.get("medication_correlation_summary"), dict)
+        else {}
+    )
+    baseline = context.get("baseline_summary") if isinstance(context.get("baseline_summary"), dict) else {}
+    highlights = context.get("monitoring_highlights") if isinstance(context.get("monitoring_highlights"), list) else []
+    clinical_notes = context.get("clinical_reference_notes") if isinstance(context.get("clinical_reference_notes"), list) else []
+    completion_guidance = (
+        context.get("data_completion_guidance") if isinstance(context.get("data_completion_guidance"), list) else []
+    )
+    followup_checklist = context.get("followup_checklist") if isinstance(context.get("followup_checklist"), list) else []
+    self_questions = (
+        context.get("self_assessment_questions")
+        if isinstance(context.get("self_assessment_questions"), list)
+        else []
+    )
+    knowledge_cards = context.get("knowledge_cards") if isinstance(context.get("knowledge_cards"), list) else []
 
     if not document_summaries:
         information_gaps.insert(0, "本次报告未纳入历史病历资料，仅基于监测与用药记录生成。")
+
+    def bullet_lines(items: list[object]) -> str:
+        return "\n".join(f"- {item}" for item in items if str(item).strip()) or f"- {MISSING_DATA_PLACEHOLDER}"
+
+    def kpi_table() -> str:
+        rows = ["| 指标 | 数值 | 说明 |", "| --- | ---: | --- |"]
+        for item in kpi_cards:
+            if isinstance(item, dict):
+                rows.append(f"| {item.get('label', '')} | {item.get('value', '')} | {item.get('hint', '')} |")
+        return "\n".join(rows)
+
+    def distribution_table(rows_source: list[object], title: str) -> str:
+        rows = [f"| {title} | 次数 | 占比 |", "| --- | ---: | ---: |"]
+        for item in rows_source:
+            if isinstance(item, dict):
+                ratio = int(round(float(item.get("ratio") or 0) * 100))
+                rows.append(f"| {item.get('label', '')} | {item.get('count', 0)} | {ratio}% |")
+        return "\n".join(rows)
+
+    def medication_table() -> str:
+        rows = ["| 时间 | 药物 | 剂量 | 状态 |", "| --- | --- | --- | --- |"]
+        for entry in medication.get("entries", [])[:8]:
+            rows.append(
+                f"| {str(entry.get('taken_at', ''))[:16]} | {entry.get('name', '')} | {entry.get('dose', '')} | {entry.get('status', '')} |"
+            )
+        return "\n".join(rows)
+
+    def correlation_table() -> str:
+        rows = ["| 服药时间 | 服药前均值 | 服药后1小时均值 | 服药后3小时均值 | 数据点 |", "| --- | ---: | ---: | ---: | --- |"]
+        for window in correlation.get("windows", []) if isinstance(correlation.get("windows"), list) else []:
+            if isinstance(window, dict):
+                rows.append(
+                    "| "
+                    f"{window.get('taken_at', '')} | "
+                    f"{window.get('before_avg') if window.get('before_avg') is not None else '不足'} | "
+                    f"{window.get('after_1h_avg') if window.get('after_1h_avg') is not None else '不足'} | "
+                    f"{window.get('after_3h_avg') if window.get('after_3h_avg') is not None else '不足'} | "
+                    f"{window.get('before_count', 0)}/{window.get('after_1h_count', 0)}/{window.get('after_3h_count', 0)} |"
+                )
+        return "\n".join(rows)
 
     section_bodies = {
         "基本信息": (
@@ -1182,19 +1306,37 @@ def _build_lightweight_report_markdown(context: dict) -> str:
             f"- 性别：{patient.get('gender') or MISSING_DATA_PLACEHOLDER}\n"
             f"- 当前诊断背景：{patient.get('diagnosis') or MISSING_DATA_PLACEHOLDER}"
         ),
-        "评估目的": "用于辅助健康管理与复诊沟通，整理 TremorGuard 监测、用药与既往病历信息，不替代医生诊断。",
+        "评估目的": (
+            "> 本报告用于辅助健康管理与复诊沟通，整理 TremorGuard 监测、用药与既往病历信息，不替代医生诊断、分期、处方或药量调整。\n\n"
+            "报告重点围绕客观监测记录、用药执行记录和缺失资料清单展开，帮助患者在复诊前更有条理地准备沟通材料。"
+        ),
+        "本次监测亮点与异常提示": bullet_lines(highlights) + "\n\n" + kpi_table(),
         "主诉与现病史": (
             f"近期监测窗口内累计记录 {event_count} 次震颤事件，平均幅度 {avg_amplitude}，峰值 {max_amplitude}。"
+            "从健康管理角度看，事件数量、幅度分布和发生时段可帮助复诊时回顾症状波动，但不能单独判断疾病进展或治疗效果。\n\n"
+            f"{analytics_text}\n\n"
+            + distribution_table(time_rows, "时段")
+            + "\n\n"
+            + distribution_table(severity_rows, "幅度等级")
         ),
         "既往史、家族史及生活方式": (
             "\n".join(
                 f"- {item.get('summary_text') or MISSING_DATA_PLACEHOLDER}" for item in document_summaries[:3]
             )
             if document_summaries
-            else MISSING_DATA_PLACEHOLDER
+            else (
+                "本次报告未纳入历史病历资料，因此暂不能结合既往门诊记录、家族史或生活方式资料解释症状变化。"
+                "建议后续补充既往病历、影像或化验资料、家族史、运动习惯、睡眠与饮食记录，以便复诊时进行更完整的背景梳理。"
+            )
         ),
         "当前治疗与用药情况": (
             f"- 用药窗口内共记录 {medication_count} 条用药记录。\n"
+            f"- {adherence.get('summary') or '当前用药执行记录仍需补充。'}\n"
+            "- 多巴丝肼属于左旋多巴联合外周脱羧酶抑制剂类药物，常用于改善帕金森相关运动症状；本报告只做用药记录整理，不提供药量调整建议。\n"
+            "- 当前记录显示 125mg 每日 3 次，总日记录剂量约 375mg。是否属于适合个体的剂量范围，应由医生结合年龄、病程、症状波动和不良反应综合评估。\n"
+            "- 建议记录服药与进餐间隔、漏服或延迟服药情况，并观察恶心、头晕、体位性低血压、异动样动作、幻觉或意识混乱等需要复诊沟通的表现。\n\n"
+            + medication_table()
+            + "\n"
             + (
                 "\n".join(
                     f"- {entry.get('taken_at', '')} {entry.get('name', '')} {entry.get('dose', '')}（{entry.get('status', '')}）"
@@ -1204,45 +1346,156 @@ def _build_lightweight_report_markdown(context: dict) -> str:
                 else f"- {MISSING_DATA_PLACEHOLDER}"
             )
         ),
+        "用药-症状关联分析": (
+            f"{correlation.get('summary') or '当前缺少可匹配的服药和震颤时间戳，暂不能形成用药前后观察。'}\n\n"
+            f"> {correlation.get('wearing_off_signal') or '当前未形成稳定的数据线索。'}\n\n"
+            + correlation_table()
+        ),
         "运动症状评估": (
             f"- 监测窗口内累计记录 {event_count} 次震颤事件。\n"
             f"- 平均幅度：{avg_amplitude}。\n"
-            f"- 峰值幅度：{max_amplitude}。"
+            f"- 峰值幅度：{max_amplitude}。\n"
+            f"- {baseline.get('summary') or '当前缺少可用历史基线，暂不能进行稳定对比。'}\n\n"
+            "TremorGuard 记录的是可穿戴设备捕捉到的震颤相关信号，可用于观察频率、幅度和时段变化。"
+            "目前数据不足以区分静止性、姿势性或动作性震颤，也不能替代 UPDRS-III 中强直、运动迟缓、步态和平衡等项目的面诊评估。"
         ),
-        "非运动症状评估": MISSING_DATA_PLACEHOLDER,
-        "日常生活能力评估": MISSING_DATA_PLACEHOLDER,
-        "体格检查": MISSING_DATA_PLACEHOLDER,
+        "非运动症状评估": (
+            "当前未采集睡眠、嗅觉、便秘、疼痛、焦虑抑郁、认知和自主神经相关问卷，因此不能评价非运动症状负担。"
+            "建议复诊前补充非运动症状清单，并记录是否存在睡眠行为异常、起身头晕、情绪低落、幻觉或记忆注意力变化。"
+        ),
+        "日常生活能力评估": (
+            "当前未采集穿衣、进食、翻身、行走、上下楼梯、精细动作和跌倒风险等日常生活能力资料。"
+            "建议患者或家属用一周时间记录需要协助的生活环节、近跌倒事件和外出活动受限情况。"
+        ),
+        "体格检查": (
+            "当前报告未纳入医生查体结果，因此不能评价肌张力、运动迟缓、姿势反射或步态平衡。"
+            "建议复诊时请医生结合体格检查和标准量表，与 TremorGuard 监测数据一起解读。"
+        ),
         "辅助检查结果": (
             "\n".join(
                 f"- {item.get('document_type') or '病例摘要'}：{item.get('summary_text') or MISSING_DATA_PLACEHOLDER}"
                 for item in document_summaries[:3]
             )
             if document_summaries
-            else MISSING_DATA_PLACEHOLDER
+            else "当前未纳入影像、化验、量表或门诊原文。建议补充既往检查资料，特别是与症状变化、用药调整讨论、认知和自主神经症状相关的记录。"
         ),
-        "量表评分与疾病分期": "当前未采集标准化量表评分，且本系统不提供疾病分期结论。",
+        "量表评分与疾病分期": (
+            "当前未采集 MDS-UPDRS、Hoehn-Yahr、MoCA/MMSE 或日常生活能力量表，本系统不提供疾病分期结论。"
+            "建议由专业人员在复诊或康复评估时完成标准化量表，以便与穿戴监测数据互相印证。"
+        ),
         "主要健康问题总结": (
-            f"{patient_name} 当前报告显示近期症状波动主要依据 TremorGuard 监测与用药记录整理，"
-            "适合在复诊时围绕症状波动、服药后变化与补充检查资料进行沟通。"
+            f"{patient_name} 当前报告显示近期症状波动主要依据 TremorGuard 监测与用药记录整理。"
+            f"本窗口记录 {event_count} 次震颤事件、{medication_count} 条用药记录，适合在复诊时围绕症状发生时段、服药后变化、重度幅度事件和资料缺口进行沟通。"
         ),
         "综合分析": (
-            "监测数据提示近期存在症状波动记录，但仍需结合医生面诊、体格检查和既往检查结果综合判断。"
+            "综合现有数据，报告可支持对震颤频率、幅度分布、用药执行和时间相关线索的健康管理观察。"
+            "由于缺少线下查体、标准量表、非运动症状问卷和完整既往病历，当前分析应定位为复诊准备材料，而不是独立医学结论。"
         ),
         "干预建议": (
-            "- 建议继续记录症状波动与服药时间关系。\n"
-            "- 建议复诊前整理既往检查原文与近期不适变化。"
+            "- 症状监测：记录震颤起止时间、诱因、伴随症状、严重度自评、服药和进餐时间。\n"
+            "- 用药管理：使用提醒工具记录按时服药；如漏服或延迟服药，记录时间和症状变化，并在复诊时询问处理原则。\n"
+            "- 生活方式：结合医生建议开展步态、平衡、柔韧和大幅度动作训练；可讨论太极、LSVT BIG 等康复训练是否适合。\n"
+            "- 饮食与睡眠：关注蛋白摄入与服药吸收的时间关系，但饮食结构调整需先咨询医生或营养师。\n"
+            "- 安全防护：评估浴室、床边、夜间照明、防滑垫和扶手等居家跌倒风险。"
         ),
-        "随访计划": "- 建议下次复诊时携带本报告与相关病历资料，由专业医生综合评估。",
-        "结论": "本报告用于辅助健康管理与复诊沟通，不替代医生诊断、分期或治疗决策。",
+        "复诊准备清单": bullet_lines(followup_checklist),
+        "症状自评问卷": bullet_lines(self_questions),
+        "知识科普卡片": (
+            "\n".join(
+                f"### {item.get('title')}\n{item.get('body')}"
+                for item in knowledge_cards
+                if isinstance(item, dict)
+            )
+            or MISSING_DATA_PLACEHOLDER
+        ),
+        "随访计划": (
+            "建议下次复诊时携带本报告与相关病历资料，由专业医生综合评估。"
+            "在复诊前继续记录至少 7 天症状-用药-进餐-睡眠时间线，以便判断现有观察是否稳定。"
+        ),
+        "结论": (
+            "本报告用于辅助健康管理与复诊沟通，不替代医生诊断、分期或治疗决策。"
+            "当前最有价值的信息是震颤事件分布、幅度分层、用药执行记录和需要补充的评估项目；后续应结合医生面诊、查体和量表综合解释。"
+        ),
     }
     if information_gaps:
         section_bodies["辅助检查结果"] += "\n\n待补充信息：\n" + "\n".join(f"- {item}" for item in information_gaps)
+    if completion_guidance:
+        section_bodies["辅助检查结果"] += "\n\n建议补充资料：\n" + bullet_lines(completion_guidance)
+    if clinical_notes:
+        section_bodies["知识科普卡片"] += "\n\n参考性健康管理提示：\n" + bullet_lines(clinical_notes)
 
     sections = [
         {"id": f"template-section-{index}", "title": f"{index}. {title}", "body": section_bodies.get(title, MISSING_DATA_PLACEHOLDER)}
         for index, title in enumerate(HEALTH_REPORT_TEMPLATE_SECTIONS, start=1)
     ]
     return _build_canonical_report_markdown(sections)
+
+
+def _has_meaningful_patient_name(patient: dict) -> bool:
+    name = str(patient.get("name") or "").strip()
+    return bool(name and name != "当前用户" and name != MISSING_DATA_PLACEHOLDER)
+
+
+def _report_markdown_consistency_errors(markdown: str, context: dict) -> list[str]:
+    patient = context.get("patient_profile") if isinstance(context.get("patient_profile"), dict) else {}
+    display_patient = (
+        context.get("display_patient_profile") if isinstance(context.get("display_patient_profile"), dict) else {}
+    )
+    monitoring = context.get("monitoring_summary") if isinstance(context.get("monitoring_summary"), dict) else {}
+    medication = context.get("medication_summary") if isinstance(context.get("medication_summary"), dict) else {}
+    errors: list[str] = []
+
+    patient_name = str(patient.get("name") or "").strip()
+    display_name = str(display_patient.get("name") or "").strip()
+    acceptable_names = [name for name in (patient_name, display_name) if name]
+    if _has_meaningful_patient_name(patient) and not any(name in markdown for name in acceptable_names):
+        errors.append(f"missing patient name {patient_name}")
+    if _has_meaningful_patient_name(patient) and "姓名：当前用户" in markdown:
+        errors.append("uses placeholder patient name")
+    report_metadata = context.get("report_metadata") if isinstance(context.get("report_metadata"), dict) else {}
+    if (
+        report_metadata.get("mask_identifiers")
+        and _has_meaningful_patient_name(patient)
+        and display_name
+        and display_name != patient_name
+        and patient_name in markdown
+    ):
+        errors.append("contains unmasked patient name despite masking configuration")
+
+    event_count = int(monitoring.get("event_count") or 0)
+    if event_count > 0 and ("0 次震颤事件" in markdown or "累计记录 0 次" in markdown):
+        errors.append("uses zero tremor count despite available monitoring data")
+    if event_count > 0 and str(event_count) not in markdown:
+        errors.append(f"missing tremor event count {event_count}")
+
+    medication_count = int(medication.get("count") or 0)
+    if medication_count > 0 and ("0 条用药记录" in markdown or "共记录 0 条" in markdown):
+        errors.append("uses zero medication count despite available medication data")
+    if medication_count > 0 and str(medication_count) not in markdown:
+        errors.append(f"missing medication count {medication_count}")
+
+    return errors
+
+
+def _report_markdown_richness_errors(markdown: str, context: dict) -> list[str]:
+    monitoring = context.get("monitoring_summary") if isinstance(context.get("monitoring_summary"), dict) else {}
+    medication = context.get("medication_summary") if isinstance(context.get("medication_summary"), dict) else {}
+    errors: list[str] = []
+    required_sections = (
+        "本次监测亮点与异常提示",
+        "用药-症状关联分析",
+        "复诊准备清单",
+        "症状自评问卷",
+        "知识科普卡片",
+    )
+    for section in required_sections:
+        if section not in markdown:
+            errors.append(f"missing enhanced section {section}")
+    if int(monitoring.get("event_count") or 0) > 0 and "|" not in markdown:
+        errors.append("missing structured table for available monitoring data")
+    if int(medication.get("count") or 0) > 0 and "依从" not in markdown:
+        errors.append("missing medication adherence interpretation")
+    return errors
 
 
 def _assert_non_diagnostic(text: str) -> None:
@@ -1405,20 +1658,6 @@ def create_report(
                 existing_report = _ensure_report_owner(session, user, existing_report_id)
                 return _to_report_summary(existing_report, archive.title)
 
-    extractions = list(
-        session.scalars(
-            select(MedicalRecordExtraction)
-            .where(
-                MedicalRecordExtraction.archive_id == archive.id,
-                MedicalRecordExtraction.user_id == user.id,
-                MedicalRecordExtraction.status == "succeeded",
-            )
-            .order_by(MedicalRecordExtraction.created_at)
-        )
-    )
-    if not extractions:
-        raise MedicalRecordsServiceError(status_code=400, detail="当前档案还没有可用于生成报告的成功抽取结果。")
-
     today = _utcnow().date()
     next_version = int(
         session.scalar(
@@ -1494,6 +1733,7 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
                 select(MedicalRecordExtraction)
                 .where(
                     MedicalRecordExtraction.archive_id == archive.id,
+                    MedicalRecordExtraction.user_id == user.id,
                     MedicalRecordExtraction.status == "succeeded",
                 )
                 .order_by(MedicalRecordExtraction.created_at)
@@ -1512,6 +1752,15 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
             report,
             trigger_message=trigger_message,
         )
+        settings = get_settings()
+        context = enrich_health_report_context(
+            context,
+            user_id=user.id,
+            report_id=report.id,
+            generated_at=_utcnow(),
+            timezone_name=settings.health_report_timezone,
+            mask_identifiers=settings.health_report_mask_identifiers,
+        )
         report.input_snapshot = context
         _set_pipeline_stage(report, "context_assembly", "succeeded", detail="数据库上下文装配完成。")
         _set_pipeline_stage(report, "template", "succeeded", detail="已将《帕金森患者健康分析报告》模板注入模型上下文。")
@@ -1519,17 +1768,55 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
         _set_pipeline_stage(report, "llm", "processing", detail="正在生成 Markdown 健康报告。")
         session.commit()
 
-        if extractions and get_settings().dashscope_api_key:
-            agent_result = HEALTH_REPORT_AGENT.generate(context=context)
-            raw_markdown = agent_result.markdown
-            report.model_name = agent_result.model_name
+        used_fallback = False
+        fallback_reason = None
+        if settings.dashscope_api_key:
+            try:
+                agent_result = HEALTH_REPORT_AGENT.generate(context=context)
+                consistency_errors = _report_markdown_consistency_errors(agent_result.markdown, context)
+                consistency_errors.extend(_report_markdown_richness_errors(agent_result.markdown, context))
+                if consistency_errors:
+                    used_fallback = True
+                    fallback_reason = "AI output failed data-consistency check: " + "; ".join(
+                        consistency_errors
+                    )
+                else:
+                    raw_markdown = agent_result.markdown
+                    report.model_name = agent_result.model_name
+            except Exception as agent_exc:  # noqa: BLE001
+                used_fallback = True
+                fallback_reason = f"AI report agent failed: {agent_exc}"
         else:
+            used_fallback = True
+            fallback_reason = "DASHSCOPE_API_KEY 未配置，使用确定性模板生成报告。"
+
+        if used_fallback:
             raw_markdown = _build_lightweight_report_markdown(context)
             report.model_name = "tremorguard-lightweight-template"
-        _set_pipeline_stage(report, "report_agent_llm", "succeeded", detail="专用报告生成 Agent 已返回 Markdown 文档。")
+            _set_pipeline_stage(
+                report,
+                "report_agent_llm",
+                "failed",
+                detail=fallback_reason,
+                error=fallback_reason,
+            )
+            _set_pipeline_stage(
+                report,
+                "llm",
+                "processing",
+                detail="已切换到确定性模板生成 Markdown 健康报告。",
+            )
+        else:
+            _set_pipeline_stage(report, "report_agent_llm", "succeeded", detail="专用报告生成 Agent 已返回 Markdown 文档。")
         _set_pipeline_stage(report, "markdown_validation", "processing", detail="正在校验报告结构与内容质量。")
 
         canonical_markdown, sections = _normalize_report_markdown(raw_markdown)
+        fallback_consistency_errors = _report_markdown_consistency_errors(canonical_markdown, context)
+        if fallback_consistency_errors:
+            raise MedicalRecordsServiceError(
+                status_code=502,
+                detail="报告内容与输入数据不一致：" + "; ".join(fallback_consistency_errors),
+            )
         report.report_markdown = canonical_markdown
         report.report_payload = _build_report_payload_from_sections(sections, context)
         if report.template_name == HEALTH_REPORT_TEMPLATE_NAME and not context.get("document_summaries"):
@@ -1578,6 +1865,11 @@ def process_pending_report(session: Session, user: User, report_id: str) -> None
                         "report_id": report.id,
                         "template_name": report.template_name,
                         "template_version": report.template_version,
+                        "created_at": report.completed_at.isoformat() if report.completed_at else None,
+                        "context": context,
+                        "sections": sections,
+                        "report_payload": report.report_payload,
+                        "mask_identifiers": settings.health_report_mask_identifiers,
                     },
                 )
             )
@@ -1808,7 +2100,26 @@ def download_report_pdf(session: Session, user: User, report_id: str) -> FileRes
     markdown = report.report_markdown or _render_report_markdown_from_payload(report.report_payload)
     if not markdown:
         raise HTTPException(status_code=404, detail="报告 PDF 尚未生成。")
-    pdf_bytes = MARKDOWN_PDF_RENDERER.render(report.title, markdown, metadata={"report_id": report.id})
+    pdf_bytes = MARKDOWN_PDF_RENDERER.render(
+        report.title,
+        markdown,
+        metadata={
+            "report_id": report.id,
+            "template_name": report.template_name,
+            "template_version": report.template_version,
+            "created_at": report.completed_at.isoformat() if report.completed_at else None,
+            "context": report.input_snapshot,
+            "sections": _report_sections(report),
+            "report_payload": report.report_payload,
+            "mask_identifiers": bool(
+                ((report.input_snapshot or {}).get("report_metadata") or {}).get(
+                    "mask_identifiers", get_settings().health_report_mask_identifiers
+                )
+                if isinstance(report.input_snapshot, dict)
+                else get_settings().health_report_mask_identifiers
+            ),
+        },
+    )
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
