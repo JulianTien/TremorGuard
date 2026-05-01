@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import sys
 import json
 from pathlib import Path
@@ -32,8 +33,19 @@ def _copy_sqlite_database(source_name: str, target_name: str) -> Path:
     return target
 
 
+def _ensure_identity_schema(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
+        if "clerk_user_id" not in columns:
+            connection.execute("ALTER TABLE users ADD COLUMN clerk_user_id VARCHAR(255)")
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_clerk_user_id ON users (clerk_user_id)"
+        )
+
+
 clinical_db = _copy_sqlite_database("clinical.db", "clinical.db")
 identity_db = _copy_sqlite_database("identity.db", "identity.db")
+_ensure_identity_schema(identity_db)
 
 os.environ.setdefault("CLINICAL_DATABASE_URL", f"sqlite:///{clinical_db}")
 os.environ.setdefault("IDENTITY_DATABASE_URL", f"sqlite:///{identity_db}")
@@ -54,4 +66,4 @@ os.environ.setdefault("MEDICAL_RECORDS_STORAGE_DIR", str(BACKEND_DIR / "storage"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.main import app  # noqa: E402
+from app.main import app  # noqa: E402,F401
