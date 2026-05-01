@@ -43,22 +43,4 @@ os.environ.setdefault("MEDICAL_RECORDS_STORAGE_DIR", str(BACKEND_DIR / "storage"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-try:
-    from app.main import app  # noqa: E402
-except Exception as exc:  # pragma: no cover - hosted runtime diagnostic fallback
-    from fastapi import FastAPI  # noqa: E402
-    from fastapi.responses import JSONResponse  # noqa: E402
-
-    app = FastAPI(title="TremorGuard Backend Import Error")
-
-    @app.get("/{path:path}")
-    def backend_import_error(path: str) -> JSONResponse:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "backend_import_failed",
-                "error_type": type(exc).__name__,
-                "detail": str(exc),
-                "path": f"/{path}",
-            },
-        )
+from app.main import app  # noqa: E402
