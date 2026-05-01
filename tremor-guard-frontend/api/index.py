@@ -9,7 +9,17 @@ from pathlib import Path
 
 FRONTEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = FRONTEND_ROOT.parent
-BACKEND_DIR = REPO_ROOT / "tremor-guard-backend"
+BACKEND_DIR = next(
+    (
+        path
+        for path in (
+            REPO_ROOT / "tremor-guard-backend",
+            FRONTEND_ROOT / "api" / "_backend_bundle",
+        )
+        if path.exists()
+    ),
+    REPO_ROOT / "tremor-guard-backend",
+)
 TMP_DIR = Path("/tmp/tremor-guard")
 
 
