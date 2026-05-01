@@ -93,6 +93,22 @@ npm run dev -- --host 127.0.0.1 --port 5173
 - 后端需优先使用仓库内 `tremor-guard-backend/.venv`，因为项目要求 Python 3.12。
 - 前端默认请求 `http://127.0.0.1:8000`，无需额外配置即可联调本地后端。
 
+## Vercel 部署说明
+
+仓库根目录的 `vercel.json` 会将 `tremor-guard-frontend/` 构建为静态前端，并把 `/v1/*`
+和 `/healthz` 重写到 `api/index.py`。该入口会把现有 FastAPI 应用作为 Vercel Python
+Function 运行，供线上 demo 登录和核心页面联调使用。
+
+前端 API 地址解析规则：
+
+- 本地 `localhost` / `127.0.0.1`：默认请求 `http://127.0.0.1:8000` 或同主机 `:8000`。
+- Vercel 或其他生产域名：默认请求当前站点同源地址，例如 `https://tremor-guard.vercel.app/v1/...`。
+- 如果后端独立部署到 Render、Railway、Cloud Run 等平台，在 Vercel 项目环境变量中设置
+  `VITE_API_BASE_URL=https://你的后端域名`，前端会优先使用该地址。
+
+当前 Vercel Function 入口使用仓库内的 SQLite demo 数据库复制到 `/tmp`，适合演示和验证登录链路；
+生产环境仍应使用独立后端服务和托管数据库。
+
 ### 方式二：使用 Docker Compose
 
 如果你想连同数据库容器一起启动，可在仓库根目录执行：

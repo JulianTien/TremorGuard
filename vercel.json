@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd tremor-guard-frontend && npm run build",
+  "outputDirectory": "tremor-guard-frontend/dist",
+  "installCommand": "cd tremor-guard-frontend && npm install",
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "tremor-guard-backend/**",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/v1/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/healthz",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

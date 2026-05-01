@@ -27,6 +27,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:4174",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://tremor-guard.vercel.app",
+        "https://tremor-guard-juliantiens-projects.vercel.app",
+        "https://tremor-guard-git-main-juliantiens-projects.vercel.app",
     ]
     demo_user_email: str = "patient@tremorguard.local"
     demo_user_password: str = "tg-demo-password"

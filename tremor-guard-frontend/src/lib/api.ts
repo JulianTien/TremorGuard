@@ -41,7 +41,12 @@ function resolveApiBaseUrl() {
   }
 
   if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:8000`
+    const localHosts = new Set(['localhost', '127.0.0.1', '::1'])
+    if (localHosts.has(window.location.hostname)) {
+      return `${window.location.protocol}//${window.location.hostname}:8000`
+    }
+
+    return window.location.origin
   }
 
   return 'http://127.0.0.1:8000'
