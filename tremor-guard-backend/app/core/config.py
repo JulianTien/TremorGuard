@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key-change-me-and-use-at-least-32-bytes"
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 14
+    clerk_jwks_url: str | None = None
+    clerk_issuer: str | None = None
+    clerk_audience: str | None = None
     device_key_salt: str = "tremor-guard-device-salt"
     activation_code_salt: str = "tremor-guard-activation-code-salt"
     cors_origins: list[str] = [

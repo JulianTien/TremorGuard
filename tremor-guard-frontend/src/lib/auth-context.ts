@@ -5,8 +5,7 @@ export interface AuthContextValue {
   session: AuthSession | null
   currentUser: CurrentUser | null
   isBootstrapping: boolean
-  login: (email: string, password: string) => Promise<CurrentUser>
-  register: (email: string, password: string, displayName: string) => Promise<CurrentUser>
+  authError: string | null
   logout: () => Promise<void>
   refreshCurrentUser: () => Promise<CurrentUser | null>
 }

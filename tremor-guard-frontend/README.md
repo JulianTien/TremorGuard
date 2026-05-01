@@ -1,5 +1,30 @@
 # React + TypeScript + Vite
 
+## Clerk auth setup
+
+Install dependencies from `tremor-guard-frontend/`:
+
+```bash
+npm install
+```
+
+Create `.env.local` for local development:
+
+```bash
+VITE_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+The React entry point wraps the app with `<ClerkProvider>` in `src/main.tsx`, and the login/register routes use Clerk React components. See Clerk's current React Vite quickstart: https://clerk.com/docs/react/getting-started/quickstart
+
+The backend must also be configured to verify Clerk session tokens before exchanging them for TremorGuard API sessions:
+
+```bash
+CLERK_JWKS_URL=https://your-clerk-domain/.well-known/jwks.json
+CLERK_ISSUER=https://your-clerk-domain
+CLERK_AUDIENCE=
+```
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

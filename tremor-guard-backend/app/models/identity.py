@@ -14,6 +14,7 @@ class User(IdentityBase):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    clerk_user_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     display_name: Mapped[str] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(50), default="patient")
     status: Mapped[str] = mapped_column(String(50), default="pending_onboarding")

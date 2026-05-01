@@ -6,6 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 import jwt
+from jwt import PyJWKClient
 from passlib.context import CryptContext
 
 from app.core.config import get_settings
@@ -51,6 +52,33 @@ def create_refresh_token(subject: str) -> tuple[str, datetime]:
 def decode_token(token: str) -> dict[str, Any]:
     settings = get_settings()
     return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+
+
+def decode_clerk_session_token(token: str) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.clerk_jwks_url:
+        raise ValueError("CLERK_JWKS_URL is not configured")
+
+    signing_key = PyJWKClient(settings.clerk_jwks_url).get_signing_key_from_jwt(token)
+    decoded = jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=settings.clerk_audience or None,
+        options={
+            "verify_aud": bool(settings.clerk_audience),
+            "verify_iss": False,
+        },
+    )
+
+    if settings.clerk_issuer:
+        accepted_issuers = {settings.clerk_issuer}
+        if ".clerk.accounts.dev" in settings.clerk_issuer:
+            accepted_issuers.add(settings.clerk_issuer.replace(".clerk.accounts.dev", ".accounts.dev"))
+        if decoded.get("iss") not in accepted_issuers:
+            raise jwt.InvalidIssuerError("Invalid issuer")
+
+    return decoded
 
 
 def hash_token(token: str) -> str:

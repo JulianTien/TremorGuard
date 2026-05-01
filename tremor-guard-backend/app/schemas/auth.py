@@ -14,6 +14,11 @@ class RegisterRequest(BaseModel):
     display_name: str
 
 
+class ClerkSessionRequest(BaseModel):
+    email: str
+    display_name: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

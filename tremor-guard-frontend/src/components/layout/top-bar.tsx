@@ -1,3 +1,4 @@
+import { Show, UserButton } from '@clerk/react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/auth-context'
 
@@ -77,6 +78,10 @@ export function TopBar() {
         <div className="hidden rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 md:block">
           {currentUser?.displayName ?? '患者账号'}
         </div>
+
+        <Show when="signed-in">
+          <UserButton />
+        </Show>
 
         <button
           type="button"

@@ -58,6 +58,20 @@ const REQUEST_TIMEOUT_MS = 15000
 export const AUTH_EVENT = 'tremor-guard-auth-changed'
 export const DEFAULT_DATA_DATE = '2026-04-05'
 
+interface ClerkRequestContext {
+  getToken: () => Promise<string | null>
+  getUserProfile: () => {
+    email?: string | null
+    displayName?: string | null
+  }
+}
+
+let clerkRequestContext: ClerkRequestContext | null = null
+
+export function configureClerkRequests(context: ClerkRequestContext | null) {
+  clerkRequestContext = context
+}
+
 interface BackendCurrentUser {
   id: string
   email: string
@@ -1035,6 +1049,21 @@ export async function registerUser(
   return postAuth('/v1/auth/register', { email, password, display_name: displayName })
 }
 
+export async function exchangeClerkSession(
+  clerkToken: string,
+  profile: { email: string; displayName: string },
+): Promise<AuthResult> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/v1/auth/clerk/session`, {
+    method: 'POST',
+    headers: buildRequestHeaders({ Authorization: `Bearer ${clerkToken}` }, true),
+    body: JSON.stringify({
+      email: profile.email,
+      display_name: profile.displayName,
+    }),
+  })
+  return persistAuthResponse(await parseJson<BackendAuthResponse>(response))
+}
+
 export async function refreshStoredSession(): Promise<AuthResult | null> {
   const session = loadStoredSession()
   if (!session) {
@@ -1074,28 +1103,41 @@ export async function logoutUser(refreshToken?: string) {
   }
 }
 
-async function authenticatedFetch(path: string, init?: RequestInit, retry = true): Promise<Response> {
+async function authenticatedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const includeJson = Boolean(init?.body) && !(init?.body instanceof FormData)
+  const headers = buildRequestHeaders(init?.headers, includeJson)
+
+  if (clerkRequestContext) {
+    const clerkToken = await clerkRequestContext.getToken()
+    if (!clerkToken) {
+      throw new ApiError(401, 'Clerk 会话尚未就绪，请重新登录。')
+    }
+
+    const profile = clerkRequestContext.getUserProfile()
+    headers.set('Authorization', `Bearer ${clerkToken}`)
+    if (profile.email) {
+      headers.set('X-Clerk-User-Email', profile.email)
+    }
+    if (profile.displayName) {
+      headers.set('X-Clerk-User-Name', encodeURIComponent(profile.displayName))
+    }
+
+    return fetchWithTimeout(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+    })
+  }
+
   const session = loadStoredSession()
   if (!session) {
     throw new ApiError(401, '会话已过期，请重新登录。')
   }
-
-  const includeJson = Boolean(init?.body) && !(init?.body instanceof FormData)
-  const headers = buildRequestHeaders(init?.headers, includeJson)
   headers.set('Authorization', `Bearer ${session.accessToken}`)
 
   const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     ...init,
     headers,
   })
-
-  if (response.status === 401 && retry) {
-    const refreshed = await refreshStoredSession()
-    if (!refreshed) {
-      throw new ApiError(401, '登录状态已失效，请重新登录。')
-    }
-    return authenticatedFetch(path, init, false)
-  }
 
   return response
 }

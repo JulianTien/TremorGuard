@@ -2,6 +2,8 @@ import json
 
 from pydantic import SecretStr
 
+from app.api import deps as api_deps
+from app.api.routes import auth as auth_routes
 from app.core.config import get_settings
 from app.services import ai_chat as ai_chat_service
 from app.services import medical_records as medical_records_service
@@ -269,6 +271,53 @@ def test_duplicate_email_registration_rejected(client):
         },
     )
     assert response.status_code == 409
+
+
+def test_clerk_session_exchange_creates_backend_session(client, monkeypatch):
+    monkeypatch.setattr(
+        auth_routes,
+        "decode_clerk_session_token",
+        lambda token: {"sub": f"clerk-{token}"},
+    )
+
+    response = client.post(
+        "/v1/auth/clerk/session",
+        headers=auth_headers("session-token"),
+        json={"email": "clerk.patient@example.com", "display_name": "Clerk Patient"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_user"]["email"] == "clerk.patient@example.com"
+    assert body["current_user"]["display_name"] == "Clerk Patient"
+    assert body["current_user"]["onboarding_state"] == "profile_required"
+
+    me_response = client.get("/v1/me", headers=auth_headers(body["access_token"]))
+    assert me_response.status_code == 200
+    assert me_response.json()["user"]["email"] == "clerk.patient@example.com"
+
+
+def test_clerk_bearer_token_authorizes_api_requests(client, monkeypatch):
+    monkeypatch.setattr(
+        api_deps,
+        "decode_clerk_session_token",
+        lambda token: {"sub": f"clerk-api-{token}"},
+    )
+
+    response = client.get(
+        "/v1/me",
+        headers={
+            **auth_headers("session-token"),
+            "X-Clerk-User-Email": "clerk.api@example.com",
+            "X-Clerk-User-Name": "%E6%82%A3%E8%80%85A",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()["user"]
+    assert body["email"] == "clerk.api@example.com"
+    assert body["display_name"] == "患者A"
+    assert body["onboarding_state"] == "profile_required"
 
 
 def test_login_and_profile_flow(client):

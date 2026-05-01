@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+import jwt
+from fastapi import APIRouter, Header, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import ClinicalSessionDep, CurrentUserDep, IdentitySessionDep
@@ -8,6 +10,7 @@ from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    decode_clerk_session_token,
     hash_token,
     hash_password,
     verify_password,
@@ -15,6 +18,7 @@ from app.core.security import (
 from app.models.identity import AuthCredential, RefreshToken, User
 from app.schemas.auth import (
     AuthSessionResponse,
+    ClerkSessionRequest,
     CurrentUserResponse,
     LoginRequest,
     LogoutRequest,
@@ -95,6 +99,59 @@ def register(
             password_updated_at=datetime.now(UTC),
         )
     )
+    return issue_auth_session(user, identity_session, clinical_session)
+
+
+@router.post("/clerk/session", response_model=AuthSessionResponse)
+def exchange_clerk_session(
+    payload: ClerkSessionRequest,
+    identity_session: IdentitySessionDep,
+    clinical_session: ClinicalSessionDep,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> AuthSessionResponse:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Clerk bearer token")
+
+    try:
+        clerk_payload = decode_clerk_session_token(authorization.removeprefix("Bearer ").strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Clerk token: {exc}",
+        ) from exc
+
+    clerk_user_id = clerk_payload.get("sub")
+    if not clerk_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Clerk token subject")
+
+    normalized_email = payload.email.strip().lower()
+    display_name = payload.display_name.strip() or normalized_email.split("@")[0]
+    user = identity_session.scalar(select(User).where(User.clerk_user_id == clerk_user_id))
+
+    if not user:
+        user = identity_session.scalar(select(User).where(User.email == normalized_email))
+        if user:
+            user.clerk_user_id = clerk_user_id
+        else:
+            user = User(
+                email=normalized_email,
+                clerk_user_id=clerk_user_id,
+                display_name=display_name,
+                status="pending_onboarding",
+                onboarding_state="profile_required",
+            )
+            identity_session.add(user)
+            identity_session.flush()
+    else:
+        email_owner = identity_session.scalar(select(User).where(User.email == normalized_email))
+        if email_owner and email_owner.id != user.id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+
+    user.email = normalized_email
+    user.display_name = display_name
+    user.is_active = True
     return issue_auth_session(user, identity_session, clinical_session)
 
 

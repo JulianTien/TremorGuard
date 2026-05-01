@@ -44,9 +44,12 @@ def get_identity_user(identity_session: IdentitySessionDep, user_id: str) -> Use
 @router.get("", response_model=CurrentUserResponse)
 def get_me(
     current_user: CurrentUserDep,
+    identity_session: IdentitySessionDep,
     clinical_session: ClinicalSessionDep,
 ) -> CurrentUserResponse:
-    return CurrentUserResponse(user=sync_user_state(current_user, clinical_session))
+    current_user_summary = sync_user_state(current_user, clinical_session)
+    identity_session.commit()
+    return CurrentUserResponse(user=current_user_summary)
 
 
 @router.get("/profile", response_model=MeProfileResponse)
